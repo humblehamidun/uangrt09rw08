@@ -1,0 +1,6 @@
+{
+  "name": "KEUANGAN RT 09 RW 08",
+  "description": "Aplikasi pencatatan dan pengelolaan keuangan RT 09 RW 08 Kelurahan Bangetayu Wetan.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
