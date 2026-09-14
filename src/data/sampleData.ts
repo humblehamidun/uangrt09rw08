@@ -10,7 +10,8 @@ import {
   BukuKasRecord,
   DanaTalangan,
   PelunasanTalangan,
-  DanaTalanganFund
+  DanaTalanganFund,
+  PengeluaranDana
 } from '../types';
 import { syncAllSourcesToBukuKas } from '../utils/bukuKasHelper';
 
@@ -43,6 +44,7 @@ export function createEmptyData(): AppStateData {
     danaTalangan: [],
     pelunasanTalangan: [],
     danaTalanganFunds: [],
+    pengeluaranDana: [],
     bukuKas: [],
     saldoAwal: [],
     auditLogs: [],
@@ -607,6 +609,59 @@ export function createSampleData(): AppStateData {
     },
   ];
 
+  const samplePengeluaranDana: PengeluaranDana[] = [
+    {
+      id: 'out-1',
+      tanggal: '2026-09-02',
+      noBukti: 'OUT-20260902-0001',
+      kategori: 'Petugas Sampah',
+      nominal: 500000,
+      penerima: 'Bapak Agus (Petugas Sampah)',
+      periode: 'September 2026',
+      keteranganPenggunaanDana: 'Honor petugas sampah bulan September 2026',
+      keterangan: 'Honor petugas sampah bulan September 2026',
+      sourceType: 'pengeluaran_dana',
+      status: 'Aktif',
+      createdBy: 'Bambang Pamungkas, S.Kom.',
+      createdAt: '2026-09-02T08:00:00.000Z',
+      updatedBy: 'Bambang Pamungkas, S.Kom.',
+      updatedAt: '2026-09-02T08:00:00.000Z',
+    },
+    {
+      id: 'out-2',
+      tanggal: '2026-09-05',
+      noBukti: 'OUT-20260905-0001',
+      kategori: 'Uang Meja',
+      nominal: 150000,
+      penerima: 'Seksi Acara & Pertemuan RT',
+      periode: 'September 2026',
+      keteranganPenggunaanDana: 'Penggunaan uang meja rapat RT bulan September',
+      keterangan: 'Penggunaan uang meja rapat RT bulan September',
+      sourceType: 'pengeluaran_dana',
+      status: 'Aktif',
+      createdBy: 'Bambang Pamungkas, S.Kom.',
+      createdAt: '2026-09-05T09:00:00.000Z',
+      updatedBy: 'Bambang Pamungkas, S.Kom.',
+      updatedAt: '2026-09-05T09:00:00.000Z',
+    },
+    {
+      id: 'out-3',
+      tanggal: '2026-09-08',
+      noBukti: 'OUT-20260908-0001',
+      kategori: 'Lainnya',
+      nominal: 100000,
+      penerima: 'Toko Barokah ATK',
+      keteranganPenggunaanDana: 'Pembelian ATK dan buku agenda RT',
+      keterangan: 'Pembelian ATK dan buku agenda RT',
+      sourceType: 'pengeluaran_dana',
+      status: 'Aktif',
+      createdBy: 'Bambang Pamungkas, S.Kom.',
+      createdAt: '2026-09-08T10:00:00.000Z',
+      updatedBy: 'Bambang Pamungkas, S.Kom.',
+      updatedAt: '2026-09-08T10:00:00.000Z',
+    },
+  ];
+
   const generatedBukuKas = syncAllSourcesToBukuKas(
     {
       warga: sampleWarga,
@@ -617,6 +672,7 @@ export function createSampleData(): AppStateData {
       saldoAwal: sampleSaldoAwal,
       danaTalangan: sampleTalangan,
       pelunasanTalangan: samplePelunasan,
+      pengeluaranDana: samplePengeluaranDana,
       settings: DEFAULT_SETTINGS,
     },
     []
@@ -632,6 +688,7 @@ export function createSampleData(): AppStateData {
     danaTalangan: sampleTalangan,
     pelunasanTalangan: samplePelunasan,
     danaTalanganFunds: sampleFunds,
+    pengeluaranDana: samplePengeluaranDana,
     bukuKas: generatedBukuKas,
     saldoAwal: sampleSaldoAwal,
     auditLogs: [],

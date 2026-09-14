@@ -11,6 +11,7 @@ import {
   DanaTalanganStatus,
   PelunasanTalangan,
   DanaTalanganFund,
+  PengeluaranDana,
   AppSettings, 
   AppStateData, 
   IuranStatus,
@@ -52,6 +53,7 @@ export interface RestorePreview {
   danaTalanganCount?: number;
   pelunasanTalanganCount?: number;
   fundsCount?: number;
+  pengeluaranDanaCount?: number;
   usersCount: number;
   parsedData?: AppStateData;
   error?: string;
@@ -148,6 +150,11 @@ interface DataContextType {
   updateDanaTalanganFund: (id: string, updates: Partial<Omit<DanaTalanganFund, 'id' | 'createdAt'>>) => void;
   deleteDanaTalanganFund: (id: string) => void;
 
+  // Pengeluaran Dana CRUD
+  addPengeluaranDana: (item: Omit<PengeluaranDana, 'id' | 'createdAt' | 'updatedAt' | 'noBukti' | 'sourceType' | 'status'>) => { success: boolean; message?: string; record?: PengeluaranDana };
+  updatePengeluaranDana: (id: string, updates: Partial<Omit<PengeluaranDana, 'id' | 'createdAt' | 'sourceType'>>) => { success: boolean; message?: string };
+  cancelPengeluaranDana: (id: string, reason: string) => { success: boolean; message?: string };
+
   // Buku Kas & Saldo Awal
   addSaldoAwal: (saldo: Omit<SaldoAwalRecord, 'id' | 'createdAt' | 'updatedAt'>) => void;
   updateSaldoAwal: (id: string, updates: Partial<Omit<SaldoAwalRecord, 'id' | 'createdAt'>>) => void;
@@ -203,12 +210,65 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 createdBy: 'H. Sugiyanto, S.E.',
                 createdAt: '2026-01-01T08:00:00.000Z',
               }];
+          const pengeluaranDana: PengeluaranDana[] = Array.isArray(parsed.pengeluaranDana) ? parsed.pengeluaranDana : [
+            {
+              id: 'out-1',
+              tanggal: '2026-09-02',
+              noBukti: 'OUT-20260902-0001',
+              kategori: 'Petugas Sampah',
+              nominal: 500000,
+              penerima: 'Bapak Agus (Petugas Sampah)',
+              periode: 'September 2026',
+              keteranganPenggunaanDana: 'Honor petugas sampah bulan September 2026',
+              keterangan: 'Honor petugas sampah bulan September 2026',
+              sourceType: 'pengeluaran_dana',
+              status: 'Aktif',
+              createdBy: 'Bambang Pamungkas, S.Kom.',
+              createdAt: '2026-09-02T08:00:00.000Z',
+              updatedBy: 'Bambang Pamungkas, S.Kom.',
+              updatedAt: '2026-09-02T08:00:00.000Z',
+            },
+            {
+              id: 'out-2',
+              tanggal: '2026-09-05',
+              noBukti: 'OUT-20260905-0001',
+              kategori: 'Uang Meja',
+              nominal: 150000,
+              penerima: 'Seksi Acara & Pertemuan RT',
+              periode: 'September 2026',
+              keteranganPenggunaanDana: 'Penggunaan uang meja rapat RT bulan September',
+              keterangan: 'Penggunaan uang meja rapat RT bulan September',
+              sourceType: 'pengeluaran_dana',
+              status: 'Aktif',
+              createdBy: 'Bambang Pamungkas, S.Kom.',
+              createdAt: '2026-09-05T09:00:00.000Z',
+              updatedBy: 'Bambang Pamungkas, S.Kom.',
+              updatedAt: '2026-09-05T09:00:00.000Z',
+            },
+            {
+              id: 'out-3',
+              tanggal: '2026-09-08',
+              noBukti: 'OUT-20260908-0001',
+              kategori: 'Lainnya',
+              nominal: 100000,
+              penerima: 'Toko Barokah ATK',
+              keteranganPenggunaanDana: 'Pembelian ATK dan buku agenda RT',
+              keterangan: 'Pembelian ATK dan buku agenda RT',
+              sourceType: 'pengeluaran_dana',
+              status: 'Aktif',
+              createdBy: 'Bambang Pamungkas, S.Kom.',
+              createdAt: '2026-09-08T10:00:00.000Z',
+              updatedBy: 'Bambang Pamungkas, S.Kom.',
+              updatedAt: '2026-09-08T10:00:00.000Z',
+            },
+          ];
           let bukuKas = Array.isArray(parsed.bukuKas) ? parsed.bukuKas : [];
 
-          // Auto-sync if empty or if talangan needs to be reflected
+          // Auto-sync if empty or if talangan / pengeluaranDana needs to be reflected
           const hasTalanganSourceInBk = bukuKas.some(b => b.sourceType === 'dana_talangan' || b.sourceType === 'pelunasan_talangan');
-          if ((bukuKas.length === 0 || (!hasTalanganSourceInBk && (danaTalangan.length > 0 || pelunasanTalangan.length > 0))) && 
-              (iuran.length > 0 || jimpitan.length > 0 || donasi.length > 0 || bop.length > 0 || saldoAwal.length > 0 || danaTalangan.length > 0)) {
+          const hasPengeluaranSourceInBk = bukuKas.some(b => b.sourceType === 'pengeluaran_dana');
+          if ((bukuKas.length === 0 || !hasPengeluaranSourceInBk || (!hasTalanganSourceInBk && (danaTalangan.length > 0 || pelunasanTalangan.length > 0))) && 
+              (iuran.length > 0 || jimpitan.length > 0 || donasi.length > 0 || bop.length > 0 || saldoAwal.length > 0 || danaTalangan.length > 0 || pengeluaranDana.length > 0)) {
             bukuKas = syncAllSourcesToBukuKas({
               warga,
               iuran,
@@ -218,6 +278,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
               saldoAwal,
               danaTalangan,
               pelunasanTalangan,
+              pengeluaranDana,
               settings,
             }, bukuKas);
           } else {
@@ -234,6 +295,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             danaTalangan,
             pelunasanTalangan,
             danaTalanganFunds,
+            pengeluaranDana,
             bukuKas,
             saldoAwal,
             auditLogs: Array.isArray(parsed.auditLogs) ? parsed.auditLogs : [],
@@ -255,6 +317,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       danaTalangan: [],
       pelunasanTalangan: [],
       danaTalanganFunds: [],
+      pengeluaranDana: [],
       bukuKas: [],
       saldoAwal: [],
       auditLogs: [],
@@ -1716,6 +1779,205 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     addToast('Catatan dana talangan berhasil dihapus.', 'info');
   }, [addToast, logAudit]);
 
+  // Pengeluaran Dana Handlers
+  const addPengeluaranDana = useCallback((itemInput: Omit<PengeluaranDana, 'id' | 'createdAt' | 'updatedAt' | 'noBukti' | 'sourceType' | 'status'>): { success: boolean; message?: string; record?: PengeluaranDana } => {
+    if (!itemInput.tanggal) {
+      return { success: false, message: 'Tanggal pengeluaran wajib diisi.' };
+    }
+    if (!itemInput.kategori) {
+      return { success: false, message: 'Kategori pengeluaran wajib dipilih.' };
+    }
+    if (!itemInput.penerima || !itemInput.penerima.trim()) {
+      return { success: false, message: 'Penerima dana wajib diisi.' };
+    }
+    if (!itemInput.nominal || itemInput.nominal <= 0) {
+      return { success: false, message: 'Nominal pengeluaran harus lebih besar dari Rp 0.' };
+    }
+    if (itemInput.kategori === 'Lainnya' && (!itemInput.keteranganPenggunaanDana || !itemInput.keteranganPenggunaanDana.trim())) {
+      return { success: false, message: 'Keterangan penggunaan dana wajib diisi untuk kategori Lainnya.' };
+    }
+
+    const now = new Date().toISOString();
+    const userName = currentUser?.nama || 'Pengurus RT';
+    const newId = `out-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+
+    let createdRecord: PengeluaranDana | undefined;
+
+    setData(prev => {
+      const existingBk = prev.bukuKas || [];
+      const noBukti = generateNoBukti('OUT', itemInput.tanggal, existingBk);
+
+      const newRecord: PengeluaranDana = {
+        ...itemInput,
+        id: newId,
+        noBukti,
+        sourceType: 'pengeluaran_dana',
+        status: 'Aktif',
+        createdBy: userName,
+        createdAt: now,
+        updatedBy: userName,
+        updatedAt: now,
+      };
+      createdRecord = newRecord;
+
+      const uraianDesc = newRecord.keteranganPenggunaanDana || newRecord.keterangan || `Pengeluaran ${newRecord.kategori}`;
+      const penerimaStr = newRecord.penerima ? ` (${newRecord.penerima})` : '';
+
+      const newBkItem: BukuKasRecord = {
+        id: `bk-out-${newRecord.id}`,
+        tanggal: newRecord.tanggal,
+        noBukti,
+        sourceType: 'pengeluaran_dana',
+        sourceId: newRecord.id,
+        kategori: newRecord.kategori,
+        uraian: `${uraianDesc}${penerimaStr}`,
+        pemasukan: 0,
+        pengeluaran: newRecord.nominal,
+        saldo: 0,
+        status: 'Aktif',
+        petugas: userName,
+        createdBy: userName,
+        createdAt: now,
+        updatedBy: userName,
+        updatedAt: now,
+        keterangan: newRecord.keterangan || (newRecord.periode ? `Periode: ${newRecord.periode}` : undefined),
+      };
+
+      const updatedBk = computeBukuKasRunningBalances([...(prev.bukuKas || []), newBkItem]);
+
+      return {
+        ...prev,
+        pengeluaranDana: [newRecord, ...(prev.pengeluaranDana || [])],
+        bukuKas: updatedBk,
+      };
+    });
+
+    logAudit('Tambah Pengeluaran Dana', `${itemInput.kategori}: Rp ${itemInput.nominal.toLocaleString('id-ID')} kepada ${itemInput.penerima}`);
+    addToast(`Pengeluaran dana ${itemInput.kategori} berhasil dicatat dan masuk ke Buku Kas.`, 'success');
+    return { success: true, record: createdRecord };
+  }, [currentUser, addToast, logAudit]);
+
+  const updatePengeluaranDana = useCallback((id: string, updates: Partial<Omit<PengeluaranDana, 'id' | 'createdAt' | 'sourceType'>>): { success: boolean; message?: string } => {
+    const target = (data.pengeluaranDana || []).find(p => p.id === id);
+    if (!target) {
+      return { success: false, message: 'Data pengeluaran dana tidak ditemukan.' };
+    }
+
+    const newKategori = updates.kategori !== undefined ? updates.kategori : target.kategori;
+    const newNominal = updates.nominal !== undefined ? updates.nominal : target.nominal;
+    const newKeteranganPenggunaan = updates.keteranganPenggunaanDana !== undefined ? updates.keteranganPenggunaanDana : target.keteranganPenggunaanDana;
+
+    if (newNominal <= 0) {
+      return { success: false, message: 'Nominal pengeluaran harus lebih besar dari Rp 0.' };
+    }
+    if (newKategori === 'Lainnya' && (!newKeteranganPenggunaan || !newKeteranganPenggunaan.trim())) {
+      return { success: false, message: 'Keterangan penggunaan dana wajib diisi untuk kategori Lainnya.' };
+    }
+
+    const now = new Date().toISOString();
+    const userName = currentUser?.nama || 'Pengurus RT';
+
+    setData(prev => {
+      const updatedList = (prev.pengeluaranDana || []).map(p => {
+        if (p.id === id) {
+          return {
+            ...p,
+            ...updates,
+            updatedAt: now,
+            updatedBy: userName,
+          };
+        }
+        return p;
+      });
+
+      const targetUpdated = updatedList.find(p => p.id === id)!;
+      const uraianDesc = targetUpdated.keteranganPenggunaanDana || targetUpdated.keterangan || `Pengeluaran ${targetUpdated.kategori}`;
+      const penerimaStr = targetUpdated.penerima ? ` (${targetUpdated.penerima})` : '';
+
+      // Update Buku Kas linked item
+      const updatedBk = (prev.bukuKas || []).map(b => {
+        if (b.sourceType === 'pengeluaran_dana' && b.sourceId === id) {
+          return {
+            ...b,
+            tanggal: targetUpdated.tanggal || b.tanggal,
+            kategori: targetUpdated.kategori,
+            uraian: `${uraianDesc}${penerimaStr}`,
+            pengeluaran: targetUpdated.nominal,
+            keterangan: targetUpdated.keterangan || (targetUpdated.periode ? `Periode: ${targetUpdated.periode}` : undefined),
+            updatedAt: now,
+            updatedBy: userName,
+          };
+        }
+        return b;
+      });
+
+      return {
+        ...prev,
+        pengeluaranDana: updatedList,
+        bukuKas: computeBukuKasRunningBalances(updatedBk),
+      };
+    });
+
+    logAudit('Edit Pengeluaran Dana', `Memperbarui pengeluaran dana ${target.noBukti} (${target.kategori})`);
+    addToast('Data pengeluaran dana berhasil diperbarui di Buku Kas.', 'success');
+    return { success: true };
+  }, [currentUser, data.pengeluaranDana, addToast, logAudit]);
+
+  const cancelPengeluaranDana = useCallback((id: string, reason: string): { success: boolean; message?: string } => {
+    const target = (data.pengeluaranDana || []).find(p => p.id === id);
+    if (!target) {
+      return { success: false, message: 'Data pengeluaran dana tidak ditemukan.' };
+    }
+    if (target.status === 'Dibatalkan') {
+      return { success: false, message: 'Pengeluaran ini sudah dibatalkan sebelumnya.' };
+    }
+
+    const now = new Date().toISOString();
+    const userName = currentUser?.nama || 'Pengurus RT';
+
+    setData(prev => {
+      const updatedList = (prev.pengeluaranDana || []).map(p => {
+        if (p.id === id) {
+          return {
+            ...p,
+            status: 'Dibatalkan' as const,
+            cancelledAt: now,
+            cancelledBy: userName,
+            cancelReason: reason || 'Dibatalkan oleh pengurus',
+            updatedAt: now,
+            updatedBy: userName,
+          };
+        }
+        return p;
+      });
+
+      const updatedBk = (prev.bukuKas || []).map(b => {
+        if (b.sourceType === 'pengeluaran_dana' && b.sourceId === id) {
+          return {
+            ...b,
+            status: 'Dibatalkan' as const,
+            cancelledAt: now,
+            cancelledBy: userName,
+            cancelReason: reason || 'Dibatalkan oleh pengurus',
+            updatedAt: now,
+            updatedBy: userName,
+          };
+        }
+        return b;
+      });
+
+      return {
+        ...prev,
+        pengeluaranDana: updatedList,
+        bukuKas: computeBukuKasRunningBalances(updatedBk),
+      };
+    });
+
+    logAudit('Batalkan Pengeluaran Dana', `Membatalkan ${target.kategori} (${target.noBukti}) Rp ${target.nominal.toLocaleString('id-ID')} (Alasan: ${reason})`);
+    addToast('Pengeluaran dana berhasil dibatalkan dan saldo Buku Kas disesuaikan.', 'warning');
+    return { success: true };
+  }, [currentUser, data.pengeluaranDana, addToast, logAudit]);
+
   // Saldo Awal Handlers
   const addSaldoAwal = useCallback((saldoInput: Omit<SaldoAwalRecord, 'id' | 'createdAt' | 'updatedAt'>) => {
     const now = new Date().toISOString();
@@ -1960,6 +2222,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         danaTalangan: data.danaTalangan,
         pelunasanTalangan: data.pelunasanTalangan,
         danaTalanganFunds: data.danaTalanganFunds,
+        pengeluaranDana: data.pengeluaranDana,
         bukuKas: data.bukuKas,
         saldoAwal: data.saldoAwal,
         auditLogs: data.auditLogs,
@@ -2001,6 +2264,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const danaTalanganCount = Array.isArray(parsed.danaTalangan) ? parsed.danaTalangan.length : 0;
       const pelunasanTalanganCount = Array.isArray(parsed.pelunasanTalangan) ? parsed.pelunasanTalangan.length : 0;
       const fundsCount = Array.isArray(parsed.danaTalanganFunds) ? parsed.danaTalanganFunds.length : 0;
+      const pengeluaranDanaCount = Array.isArray(parsed.pengeluaranDana) ? parsed.pengeluaranDana.length : 0;
       const bukuKasCount = Array.isArray(parsed.bukuKas) ? parsed.bukuKas.length : 0;
       const saldoAwalCount = Array.isArray(parsed.saldoAwal) ? parsed.saldoAwal.length : 0;
       const usersCount = Array.isArray(parsed.users) ? parsed.users.length : 0;
@@ -2009,9 +2273,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const restoredTalangan = Array.isArray(parsed.danaTalangan) ? parsed.danaTalangan : [];
       const restoredPelunasan = Array.isArray(parsed.pelunasanTalangan) ? parsed.pelunasanTalangan : [];
       const restoredFunds = Array.isArray(parsed.danaTalanganFunds) ? parsed.danaTalanganFunds : [];
+      const restoredPengeluaran = Array.isArray(parsed.pengeluaranDana) ? parsed.pengeluaranDana : [];
       let restoredBukuKas = Array.isArray(parsed.bukuKas) ? parsed.bukuKas : [];
 
-      if (restoredBukuKas.length === 0 && (iuranCount > 0 || jimpitanCount > 0 || donasiCount > 0 || bopCount > 0 || saldoAwalCount > 0 || danaTalanganCount > 0)) {
+      if (restoredBukuKas.length === 0 && (iuranCount > 0 || jimpitanCount > 0 || donasiCount > 0 || bopCount > 0 || saldoAwalCount > 0 || danaTalanganCount > 0 || pengeluaranDanaCount > 0)) {
         restoredBukuKas = syncAllSourcesToBukuKas({
           warga: parsed.warga || [],
           iuran: parsed.iuran || [],
@@ -2021,6 +2286,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           saldoAwal: restoredSaldoAwal,
           danaTalangan: restoredTalangan,
           pelunasanTalangan: restoredPelunasan,
+          pengeluaranDana: restoredPengeluaran,
           settings: { ...DEFAULT_SETTINGS, ...(parsed.settings || {}) },
         }, []);
       } else {
@@ -2037,6 +2303,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         danaTalangan: restoredTalangan,
         pelunasanTalangan: restoredPelunasan,
         danaTalanganFunds: restoredFunds,
+        pengeluaranDana: restoredPengeluaran,
         bukuKas: restoredBukuKas,
         saldoAwal: restoredSaldoAwal,
         auditLogs: Array.isArray(parsed.auditLogs) ? parsed.auditLogs : [],
@@ -2054,6 +2321,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         danaTalanganCount,
         pelunasanTalanganCount,
         fundsCount,
+        pengeluaranDanaCount,
         bukuKasCount,
         saldoAwalCount,
         usersCount,
@@ -2144,6 +2412,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     addDanaTalanganFund,
     updateDanaTalanganFund,
     deleteDanaTalanganFund,
+    addPengeluaranDana,
+    updatePengeluaranDana,
+    cancelPengeluaranDana,
     addSaldoAwal,
     updateSaldoAwal,
     deleteSaldoAwal,
@@ -2204,6 +2475,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     addDanaTalanganFund,
     updateDanaTalanganFund,
     deleteDanaTalanganFund,
+    addPengeluaranDana,
+    updatePengeluaranDana,
+    cancelPengeluaranDana,
     addSaldoAwal,
     updateSaldoAwal,
     deleteSaldoAwal,

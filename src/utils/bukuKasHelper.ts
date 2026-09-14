@@ -17,7 +17,7 @@ import { generateId, formatRupiah } from './format';
  * Format: IUR-YYYYMMDD-XXXX, JMP-YYYYMMDD-XXXX, DON-YYYYMMDD-XXXX, BOP-YYYYMMDD-XXXX, SA-YYYYMMDD-XXXX
  */
 export function generateNoBukti(
-  prefix: 'IUR' | 'JMP' | 'DON' | 'BOP' | 'SA' | 'TAL' | 'PEL',
+  prefix: 'IUR' | 'JMP' | 'DON' | 'BOP' | 'SA' | 'TAL' | 'PEL' | 'OUT',
   dateStr: string,
   existingList: BukuKasRecord[]
 ): string {
@@ -97,6 +97,7 @@ export function syncAllSourcesToBukuKas(
   data: Pick<AppStateData, 'warga' | 'iuran' | 'jimpitan' | 'donasi' | 'bop' | 'saldoAwal' | 'settings'> & {
     danaTalangan?: AppStateData['danaTalangan'];
     pelunasanTalangan?: AppStateData['pelunasanTalangan'];
+    pengeluaranDana?: AppStateData['pengeluaranDana'];
   },
   existingBukuKas: BukuKasRecord[] = [],
   currentUser?: AppUser | null
@@ -441,7 +442,54 @@ export function syncAllSourcesToBukuKas(
     }
   }
 
-  // 8. Handle any existing records in existingBukuKas whose source has been completely deleted
+  // 8. Pengeluaran Dana Records (Kas Berkurang / Pengeluaran Dana RT)
+  if (Array.isArray(data.pengeluaranDana)) {
+    for (const record of data.pengeluaranDana) {
+      const sourceKey = `pengeluaran_dana:${record.id}`;
+      const existing = existingMap.get(sourceKey);
+      const noBukti = record.noBukti || existing?.noBukti || generateNoBukti('OUT', record.tanggal, [...existingBukuKas, ...resultList]);
+      const isActive = record.status === 'Aktif';
+
+      const uraianDesc = record.keteranganPenggunaanDana || record.keterangan || `Pengeluaran ${record.kategori}`;
+      const penerimaStr = record.penerima ? ` (${record.penerima})` : '';
+
+      if (isActive) {
+        resultList.push({
+          id: existing?.id || `bk-out-${record.id}`,
+          tanggal: record.tanggal,
+          noBukti,
+          sourceType: 'pengeluaran_dana',
+          sourceId: record.id,
+          kategori: record.kategori,
+          uraian: `${uraianDesc}${penerimaStr}`,
+          pemasukan: 0,
+          pengeluaran: record.nominal || 0,
+          saldo: 0,
+          status: 'Aktif',
+          petugas: record.createdBy || defaultOfficer,
+          createdBy: existing?.createdBy || record.createdBy || defaultOfficer,
+          createdAt: existing?.createdAt || record.createdAt || nowIso,
+          updatedBy: record.updatedBy || defaultOfficer,
+          updatedAt: record.updatedAt || nowIso,
+          keterangan: record.keterangan || (record.periode ? `Periode: ${record.periode}` : undefined),
+        });
+      } else if (existing && existing.status === 'Aktif') {
+        resultList.push({
+          ...existing,
+          status: 'Dibatalkan',
+          cancelledAt: record.cancelledAt || nowIso,
+          cancelledBy: record.cancelledBy || defaultOfficer,
+          cancelReason: record.cancelReason || 'Pengeluaran dana dibatalkan oleh pengguna',
+          updatedAt: nowIso,
+          updatedBy: defaultOfficer,
+        });
+      } else if (existing && existing.status === 'Dibatalkan') {
+        resultList.push(existing);
+      }
+    }
+  }
+
+  // 9. Handle any existing records in existingBukuKas whose source has been completely deleted
   // We keep cancelled ones or mark orphaned ones as Dibatalkan to preserve accounting integrity
   const sourceKeysInCurrent = new Set(resultList.map(r => `${r.sourceType}:${r.sourceId}`));
   for (const oldItem of existingBukuKas) {
@@ -598,6 +646,13 @@ export function reconcileBukuKas(data: AppStateData): ReconciliationReport {
       bukuKasTotal: totalPelunasanBukuKas,
       difference: totalPelunasanSource - totalPelunasanBukuKas,
       status: (totalPelunasanSource === totalPelunasanBukuKas ? 'SESUAI' : 'SELISIH') as 'SESUAI' | 'SELISIH',
+    },
+    {
+      name: 'Pengeluaran Dana',
+      sourceTotal: (data.pengeluaranDana || []).filter(p => p.status === 'Aktif').reduce((acc, curr) => acc + (curr.nominal || 0), 0),
+      bukuKasTotal: activeBukuKas.filter(b => b.sourceType === 'pengeluaran_dana').reduce((acc, curr) => acc + curr.pengeluaran, 0),
+      difference: (data.pengeluaranDana || []).filter(p => p.status === 'Aktif').reduce((acc, curr) => acc + (curr.nominal || 0), 0) - activeBukuKas.filter(b => b.sourceType === 'pengeluaran_dana').reduce((acc, curr) => acc + curr.pengeluaran, 0),
+      status: ((data.pengeluaranDana || []).filter(p => p.status === 'Aktif').reduce((acc, curr) => acc + (curr.nominal || 0), 0) === activeBukuKas.filter(b => b.sourceType === 'pengeluaran_dana').reduce((acc, curr) => acc + curr.pengeluaran, 0) ? 'SESUAI' : 'SELISIH') as 'SESUAI' | 'SELISIH',
     },
   ];
 

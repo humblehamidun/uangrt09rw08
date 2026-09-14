@@ -13,11 +13,12 @@ import {
   Briefcase, 
   Building2,
   CheckCircle,
-  Clock
+  Clock,
+  WalletCards
 } from 'lucide-react';
 import { formatRupiah, NAMA_BULAN, formatTanggalIndonesia, downloadCSV } from '../../utils/format';
 
-type LaporanTab = 'kas_rt' | 'iuran' | 'jimpitan' | 'donasi' | 'bop';
+type LaporanTab = 'kas_rt' | 'iuran' | 'jimpitan' | 'donasi' | 'bop' | 'pengeluaran_dana';
 
 export const LaporanView: React.FC = () => {
   const { data, getIuranForWarga, getJimpitanForWarga, periodFilter } = useData();
@@ -146,10 +147,27 @@ export const LaporanView: React.FC = () => {
     };
   }, [data.bop, selectedBulan, selectedTahun, useSemuaBulan]);
 
+  // Calculations for Pengeluaran Dana in selected period
+  const pengeluaranDanaReportData = useMemo(() => {
+    const filtered = (data.pengeluaranDana || []).filter(p => {
+      if (p.status === 'Dibatalkan') return false;
+      const date = new Date(p.tanggal);
+      if (date.getFullYear() !== selectedTahun) return false;
+      if (!useSemuaBulan && date.getMonth() + 1 !== selectedBulan) return false;
+      return true;
+    }).sort((a, b) => new Date(a.tanggal).getTime() - new Date(b.tanggal).getTime());
+
+    const total = filtered.reduce((s, p) => s + (p.nominal || 0), 0);
+    return {
+      records: filtered,
+      total,
+    };
+  }, [data.pengeluaranDana, selectedBulan, selectedTahun, useSemuaBulan]);
+
   // Overall Kas RT Financial Statement (Laporan Keuangan Keseluruhan)
   const kasRtStatement = useMemo(() => {
     const totalPemasukan = iuranReportData.totalAll + jimpitanReportData.totalJimpitan + donasiReportData.total + bopReportData.masuk;
-    const totalPengeluaran = bopReportData.keluar;
+    const totalPengeluaran = bopReportData.keluar + pengeluaranDanaReportData.total;
     const saldoAkhir = totalPemasukan - totalPengeluaran;
 
     return {
@@ -158,7 +176,7 @@ export const LaporanView: React.FC = () => {
       saldoAkhir,
       isDefisit: saldoAkhir < 0,
     };
-  }, [iuranReportData, jimpitanReportData, donasiReportData, bopReportData]);
+  }, [iuranReportData, jimpitanReportData, donasiReportData, bopReportData, pengeluaranDanaReportData]);
 
   // Print Handler
   const handlePrint = () => {
@@ -178,6 +196,7 @@ export const LaporanView: React.FC = () => {
         ['PEMASUKAN', 'Total Pemasukan BOP (Bantuan/Subsidi)', formatRupiah(bopReportData.masuk)],
         ['TOTAL PEMASUKAN', 'Semua Penerimaan Kas RT', formatRupiah(kasRtStatement.totalPemasukan)],
         ['PENGELUARAN', 'Total Pengeluaran BOP (Biaya Operasional)', formatRupiah(bopReportData.keluar)],
+        ['PENGELUARAN', 'Total Pengeluaran Dana Kas RT', formatRupiah(pengeluaranDanaReportData.total)],
         ['TOTAL PENGELUARAN', 'Semua Pengeluaran Kas RT', formatRupiah(kasRtStatement.totalPengeluaran)],
         ['SALDO AKHIR RT', 'Total Pemasukan - Total Pengeluaran', formatRupiah(kasRtStatement.saldoAkhir)],
       ];
@@ -234,6 +253,19 @@ export const LaporanView: React.FC = () => {
         b.keterangan || '-',
       ]);
       downloadCSV(`Laporan_BOP_${periodStr}`, headers, rows);
+    } else if (activeTab === 'pengeluaran_dana') {
+      const headers = ['No', 'No Bukti', 'Tanggal', 'Kategori', 'Keterangan Penggunaan', 'Nominal', 'Penerima', 'Penanggung Jawab'];
+      const rows = pengeluaranDanaReportData.records.map((p, idx) => [
+        idx + 1,
+        p.noBukti,
+        p.tanggal,
+        p.kategori,
+        p.keterangan || '-',
+        formatRupiah(p.nominal),
+        p.penerima || '-',
+        p.penanggungJawab || '-',
+      ]);
+      downloadCSV(`Laporan_Pengeluaran_Dana_${periodStr}`, headers, rows);
     }
   };
 
@@ -406,6 +438,20 @@ export const LaporanView: React.FC = () => {
           <Briefcase className="w-4 h-4" />
           4. Laporan BOP
         </button>
+
+        <button
+          id="tab-laporan-pengeluaran-dana"
+          type="button"
+          onClick={() => setActiveTab('pengeluaran_dana')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
+            activeTab === 'pengeluaran_dana'
+              ? 'bg-emerald-600 text-white shadow-md shadow-emerald-950/40'
+              : 'text-slate-400 hover:text-white hover:bg-slate-900'
+          }`}
+        >
+          <WalletCards className="w-4 h-4" />
+          5. Pengeluaran Dana
+        </button>
       </div>
 
       {/* Printable Report Document Card */}
@@ -509,27 +555,43 @@ export const LaporanView: React.FC = () => {
             <div className="space-y-3">
               <div className="flex items-center justify-between pb-2 border-b-2 border-rose-500/40">
                 <h3 className="text-sm font-extrabold uppercase tracking-wider text-rose-400 print:text-black">
-                  B. RINCIAN PENGELUARAN (BOP & OPERASIONAL)
+                  B. RINCIAN PENGELUARAN KAS & OPERASIONAL RT
                 </h3>
                 <span className="text-xs text-slate-400 print:text-black font-semibold">Subtotal</span>
               </div>
 
-              {bopReportData.records.filter(b => b.jenis === 'Pengeluaran').length === 0 ? (
+              {bopReportData.records.filter(b => b.jenis === 'Pengeluaran').length === 0 && pengeluaranDanaReportData.records.length === 0 ? (
                 <div className="p-3 text-center text-slate-400 text-xs italic">
                   Tidak ada pengeluaran pada periode ini.
                 </div>
               ) : (
                 <div className="space-y-2 text-xs">
+                  {/* BOP Items */}
                   {bopReportData.records.filter(b => b.jenis === 'Pengeluaran').map((b, idx) => (
-                    <div key={b.id} className="flex justify-between py-2 px-3 rounded-lg bg-slate-950/60 print:bg-gray-50 border border-slate-800 print:border-gray-200">
+                    <div key={`bop-${b.id}`} className="flex justify-between py-2 px-3 rounded-lg bg-slate-950/60 print:bg-gray-50 border border-slate-800 print:border-gray-200">
                       <div>
-                        <span className="font-semibold text-white print:text-black">{idx + 1}. {b.uraian}</span>
+                        <span className="font-semibold text-white print:text-black">[BOP] {b.uraian}</span>
                         <div className="text-[11px] text-slate-400 print:text-gray-600">
                           {formatTanggalIndonesia(b.tanggal, 'short')} | Kategori: {b.kategori} {b.keterangan ? `(${b.keterangan})` : ''}
                         </div>
                       </div>
                       <span className="font-mono font-bold text-rose-400 print:text-black self-center">
                         {formatRupiah(b.nominal)}
+                      </span>
+                    </div>
+                  ))}
+
+                  {/* Pengeluaran Dana Items */}
+                  {pengeluaranDanaReportData.records.map((p, idx) => (
+                    <div key={`pd-${p.id}`} className="flex justify-between py-2 px-3 rounded-lg bg-slate-950/60 print:bg-gray-50 border border-slate-800 print:border-gray-200">
+                      <div>
+                        <span className="font-semibold text-white print:text-black">[Dana RT] {p.kategori} - {p.uraian}</span>
+                        <div className="text-[11px] text-slate-400 print:text-gray-600">
+                          {formatTanggalIndonesia(p.tanggal, 'short')} | No Bukti: {p.noBukti} {p.keterangan ? `(${p.keterangan})` : ''} {p.penerima ? `• Penerima: ${p.penerima}` : ''}
+                        </div>
+                      </div>
+                      <span className="font-mono font-bold text-rose-400 print:text-black self-center">
+                        {formatRupiah(p.nominal)}
                       </span>
                     </div>
                   ))}
@@ -793,6 +855,63 @@ export const LaporanView: React.FC = () => {
                           {b.jenis === 'Pemasukan' ? '+' : '-'}{formatRupiah(b.nominal)}
                         </td>
                         <td className="py-2 px-3 text-slate-400 print:text-black">{b.keterangan || '-'}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 6: LAPORAN PENGELUARAN DANA KAS RT */}
+        {activeTab === 'pengeluaran_dana' && (
+          <div className="space-y-4">
+            <div className="flex justify-between items-center text-xs">
+              <span className="font-bold text-white print:text-black">Tabel Transaksi Pengeluaran Dana Kas RT</span>
+              <div className="flex items-center gap-3 font-mono text-xs">
+                <span className="text-slate-400">Jumlah: {pengeluaranDanaReportData.records.length} transaksi</span>
+                <span className="text-rose-400 font-bold">Total: {formatRupiah(pengeluaranDanaReportData.total)}</span>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-xs print:text-[10px]">
+                <thead>
+                  <tr className="bg-slate-950/80 print:bg-gray-100 border-b border-slate-800 print:border-black font-bold text-slate-300 print:text-black">
+                    <th className="py-2.5 px-3">No</th>
+                    <th className="py-2.5 px-3">Tanggal</th>
+                    <th className="py-2.5 px-3">No. Bukti</th>
+                    <th className="py-2.5 px-3">Kategori</th>
+                    <th className="py-2.5 px-3">Uraian / Keterangan</th>
+                    <th className="py-2.5 px-3">Penerima</th>
+                    <th className="py-2.5 px-3 text-right">Nominal</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800 print:divide-gray-300">
+                  {pengeluaranDanaReportData.records.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="py-8 text-center text-slate-400">
+                        Tidak ada catatan pengeluaran dana pada periode ini.
+                      </td>
+                    </tr>
+                  ) : (
+                    pengeluaranDanaReportData.records.map((p, idx) => (
+                      <tr key={p.id}>
+                        <td className="py-2 px-3 font-mono">{idx + 1}</td>
+                        <td className="py-2 px-3">{formatTanggalIndonesia(p.tanggal, 'short')}</td>
+                        <td className="py-2 px-3 font-mono text-slate-300 print:text-black">{p.noBukti}</td>
+                        <td className="py-2 px-3 font-semibold text-rose-400 print:text-black">{p.kategori}</td>
+                        <td className="py-2 px-3">
+                          <div className="font-medium text-white print:text-black">{p.uraian}</div>
+                          {p.keterangan && (
+                            <div className="text-[11px] text-slate-400 print:text-gray-600">{p.keterangan}</div>
+                          )}
+                        </td>
+                        <td className="py-2 px-3 text-slate-300 print:text-black">{p.penerima || '-'}</td>
+                        <td className="py-2 px-3 text-right font-mono font-bold text-rose-400 print:text-black">
+                          -{formatRupiah(p.nominal)}
+                        </td>
                       </tr>
                     ))
                   )}

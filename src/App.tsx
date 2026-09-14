@@ -24,6 +24,7 @@ import { JimpitanView } from './components/views/JimpitanView';
 import { DonasiView } from './components/views/DonasiView';
 import { BopView } from './components/views/BopView';
 import { DanaTalanganView } from './components/views/DanaTalanganView';
+import { PengeluaranDanaView } from './components/views/PengeluaranDanaView';
 import { LaporanView } from './components/views/LaporanView';
 import { PengaturanView } from './components/views/PengaturanView';
 import { UserManagementView } from './components/views/UserManagementView';
@@ -39,6 +40,7 @@ const TAB_TITLES: Record<TabType, string> = {
   'donasi': 'Catatan Donasi',
   'bop': 'Buku Kas Operasional (BOP)',
   'dana-talangan': 'Dana Talangan Kematian',
+  'pengeluaran-dana': 'Pengeluaran Dana Kas RT',
   'laporan': 'Laporan Keuangan',
   'audit-log': 'Audit Log Aktivitas',
   'pengguna': 'Manajemen Pengguna',
@@ -103,6 +105,8 @@ const MainContent: React.FC = () => {
         return <BopView />;
       case 'dana-talangan':
         return <DanaTalanganView />;
+      case 'pengeluaran-dana':
+        return <PengeluaranDanaView onNavigate={(tab) => setActiveTab(tab)} />;
       case 'laporan':
         return <LaporanView />;
       case 'audit-log':

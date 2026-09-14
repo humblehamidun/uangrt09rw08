@@ -117,8 +117,42 @@ export interface AppUser {
   lastLogin?: string;
 }
 
-export type BukuKasSourceType = 'iuran' | 'jimpitan' | 'donasi' | 'bop' | 'saldo_awal' | 'dana_talangan' | 'pelunasan_talangan';
+export type BukuKasSourceType = 'iuran' | 'jimpitan' | 'donasi' | 'bop' | 'saldo_awal' | 'dana_talangan' | 'pelunasan_talangan' | 'pengeluaran_dana';
 export type BukuKasStatus = 'Aktif' | 'Dibatalkan';
+
+export type PengeluaranDanaKategori = 
+  | 'Petugas Sampah'
+  | 'Uang Meja'
+  | 'Kegiatan RT'
+  | 'Kebersihan'
+  | 'Perawatan'
+  | 'Administrasi'
+  | 'Listrik'
+  | 'Air'
+  | 'Keamanan'
+  | 'Sosial'
+  | 'Lainnya';
+
+export interface PengeluaranDana {
+  id: string;
+  tanggal: string; // YYYY-MM-DD
+  noBukti: string; // OUT-YYYYMMDD-XXXX
+  kategori: PengeluaranDanaKategori | string;
+  nominal: number;
+  penerima: string;
+  periode?: string;
+  keterangan?: string;
+  keteranganPenggunaanDana?: string;
+  sourceType: 'pengeluaran_dana';
+  status: 'Aktif' | 'Dibatalkan';
+  createdBy?: string;
+  createdAt: string;
+  updatedBy?: string;
+  updatedAt: string;
+  cancelledBy?: string;
+  cancelledAt?: string;
+  cancelReason?: string;
+}
 
 export type DanaTalanganStatus = 'Belum Lunas' | 'Sebagian' | 'Lunas';
 export type DanaTalanganStatusAktif = 'Aktif' | 'Dibatalkan';
@@ -236,6 +270,7 @@ export interface AppStateData {
   danaTalangan: DanaTalangan[];
   pelunasanTalangan: PelunasanTalangan[];
   danaTalanganFunds: DanaTalanganFund[];
+  pengeluaranDana: PengeluaranDana[];
   bukuKas: BukuKasRecord[];
   saldoAwal: SaldoAwalRecord[];
   auditLogs: AuditLogItem[];
@@ -251,6 +286,7 @@ export type NavigationTab =
   | 'donasi'
   | 'bop'
   | 'dana-talangan'
+  | 'pengeluaran-dana'
   | 'buku-kas'
   | 'laporan'
   | 'pengaturan'

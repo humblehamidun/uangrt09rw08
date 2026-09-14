@@ -50,7 +50,7 @@ export const BukuKasView: React.FC<BukuKasViewProps> = ({ onNavigate }) => {
 
   // Filters
   const [searchTerm, setSearchTerm] = useState('');
-  const [sourceFilter, setSourceFilter] = useState<'All' | 'saldo_awal' | 'iuran' | 'jimpitan' | 'donasi' | 'bop'>('All');
+  const [sourceFilter, setSourceFilter] = useState<'All' | 'saldo_awal' | 'iuran' | 'jimpitan' | 'donasi' | 'bop' | 'dana_talangan' | 'pelunasan_talangan' | 'pengeluaran_dana'>('All');
   const [jenisFilter, setJenisFilter] = useState<'All' | 'pemasukan' | 'pengeluaran'>('All');
   const [statusFilter, setStatusFilter] = useState<'All' | 'Aktif' | 'Dibatalkan'>('All');
   const [selectedTahun, setSelectedTahun] = useState<string>('All');
@@ -241,6 +241,13 @@ export const BukuKasView: React.FC<BukuKasViewProps> = ({ onNavigate }) => {
       case 'bop':
         onNavigate('bop');
         break;
+      case 'pengeluaran_dana':
+        onNavigate('pengeluaran-dana');
+        break;
+      case 'dana_talangan':
+      case 'pelunasan_talangan':
+        onNavigate('dana-talangan');
+        break;
       default:
         break;
     }
@@ -256,6 +263,12 @@ export const BukuKasView: React.FC<BukuKasViewProps> = ({ onNavigate }) => {
         return <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">Donasi</span>;
       case 'bop':
         return <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-purple-500/10 text-purple-400 border border-purple-500/20">BOP Operasional</span>;
+      case 'pengeluaran_dana':
+        return <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/20">Pengeluaran Dana</span>;
+      case 'dana_talangan':
+        return <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-orange-500/10 text-orange-400 border border-orange-500/20">Dana Talangan</span>;
+      case 'pelunasan_talangan':
+        return <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Pelunasan Talangan</span>;
       case 'saldo_awal':
         return <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Saldo Awal</span>;
       default:
@@ -497,6 +510,9 @@ export const BukuKasView: React.FC<BukuKasViewProps> = ({ onNavigate }) => {
               <option value="jimpitan">Jimpitan</option>
               <option value="donasi">Donasi</option>
               <option value="bop">BOP Operasional</option>
+              <option value="pengeluaran_dana">Pengeluaran Dana RT</option>
+              <option value="dana_talangan">Dana Talangan Kematian</option>
+              <option value="pelunasan_talangan">Pelunasan Talangan</option>
             </select>
           </div>
 

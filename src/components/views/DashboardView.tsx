@@ -87,6 +87,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
       .filter(b => b.jenis === 'Pengeluaran')
       .reduce((acc, curr) => acc + (curr.nominal || 0), 0);
 
+    // Pengeluaran Dana for this month/year
+    const monthlyPengeluaranDanaList = (data.pengeluaranDana || []).filter(p => {
+      if (!p.tanggal || p.status === 'Dibatalkan') return false;
+      const parts = p.tanggal.split('-');
+      return parseInt(parts[0], 10) === selectedTahun && parseInt(parts[1], 10) === selectedBulan;
+    });
+    const totalPengeluaranDanaMonth = monthlyPengeluaranDanaList.reduce((acc, curr) => acc + (curr.nominal || 0), 0);
+    const allPengeluaranDana = (data.pengeluaranDana || [])
+      .filter(p => p.status === 'Aktif')
+      .reduce((acc, curr) => acc + (curr.nominal || 0), 0);
+
     // Total Overall (All time for global cash balance)
     const allIuran = data.iuran.reduce((acc, curr) => acc + (curr.total || 0), 0);
     const allJimpitan = data.jimpitan.reduce((acc, curr) => acc + (curr.total || 0), 0);
@@ -98,11 +109,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
       .filter(b => b.jenis === 'Pengeluaran')
       .reduce((acc, curr) => acc + (curr.nominal || 0), 0);
 
+    const totalPengeluaranMonth = totalBopPengeluaranMonth + totalPengeluaranDanaMonth;
+    const totalPengeluaranAll = allBopPengeluaran + allPengeluaranDana;
+
     const totalPemasukanMonth = totalIuranMonth + totalJimpitanMonth + totalDonasiMonth + totalBopPemasukanMonth;
-    const saldoKasMonth = totalPemasukanMonth - totalBopPengeluaranMonth;
+    const saldoKasMonth = totalPemasukanMonth - totalPengeluaranMonth;
 
     const totalPemasukanAll = allIuran + allJimpitan + allDonasi + allBopPemasukan;
-    const saldoKasAll = totalPemasukanAll - allBopPengeluaran;
+    const saldoKasAll = totalPemasukanAll - totalPengeluaranAll;
 
     // Warga payment status for chosen month
     const totalWarga = data.warga.length;
@@ -158,9 +172,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
       totalDonasiMonth,
       totalBopPemasukanMonth,
       totalBopPengeluaranMonth,
+      totalPengeluaranDanaMonth,
+      totalPengeluaranMonth,
       totalPemasukanMonth,
       saldoKasMonth,
       totalPemasukanAll,
+      totalPengeluaranAll,
       saldoKasAll,
       totalWarga,
       activeWargaCount: activeWarga.length,
@@ -171,6 +188,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
       jimpitanThisWeekPaidCount,
       sources,
       monthlyBop,
+      monthlyPengeluaranDanaList,
       totalDanaTalanganDisediakan,
       totalTalanganDipinjam,
       totalTalanganDilunasi,
@@ -211,13 +229,20 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
           return parseInt(parts[0], 10) === selectedTahun && parseInt(parts[1], 10) === m && b.jenis === 'Pengeluaran';
         })
         .reduce((sum, c) => sum + (c.nominal || 0), 0);
+      const mPengeluaranDana = (data.pengeluaranDana || [])
+        .filter(p => {
+          if (!p.tanggal || p.status === 'Dibatalkan') return false;
+          const parts = p.tanggal.split('-');
+          return parseInt(parts[0], 10) === selectedTahun && parseInt(parts[1], 10) === m;
+        })
+        .reduce((sum, c) => sum + (c.nominal || 0), 0);
 
       const pemasukan = mIuran + mJimpitan + mDonasi + mBopIn;
       return {
         monthIndex: m,
         monthName: NAMA_BULAN[idx].slice(0, 3),
         pemasukan,
-        pengeluaran: mBopOut,
+        pengeluaran: mBopOut + mPengeluaranDana,
       };
     });
   }, [data, selectedTahun]);
@@ -421,11 +446,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
           </div>
           <div className="mt-3">
             <div className="text-2xl font-bold font-mono text-[#DC3545] tracking-tight">
-              {formatRupiah(stats.totalBopPengeluaranMonth)}
+              {formatRupiah(stats.totalPengeluaranMonth)}
             </div>
             <div className="text-xs text-[#6B7280] mt-1 flex items-center justify-between">
-              <span>BOP Operasional</span>
-              <span className="text-[#DC3545] font-medium">{stats.monthlyBop.filter(b => b.jenis === 'Pengeluaran').length} transaksi</span>
+              <span>BOP & Dana Kas RT</span>
+              <span className="text-[#DC3545] font-medium">{stats.monthlyBop.filter(b => b.jenis === 'Pengeluaran').length + stats.monthlyPengeluaranDanaList.length} transaksi</span>
             </div>
           </div>
         </div>
