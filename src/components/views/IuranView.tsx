@@ -11,9 +11,11 @@ import {
   Download, 
   FileEdit,
   Sparkles,
-  ArrowUpDown
+  ArrowUpDown,
+  Printer
 } from 'lucide-react';
 import { formatRupiah, NAMA_BULAN, downloadCSV } from '../../utils/format';
+import { PrintReportHeader, PrintReportFooter, PrintPageStyle } from '../common/PrintReportLayout';
 
 export const IuranView: React.FC = () => {
   const { 
@@ -168,7 +170,7 @@ export const IuranView: React.FC = () => {
     const rows = filteredRows.map(r => [
       r.index,
       r.warga.nomorRumah,
-      r.warga.nama,
+      r.warga.namaWarga || r.warga.nama,
       r.kas ? formatRupiah(data.settings.nominalKas) : 'Rp 0',
       r.uangMeja ? formatRupiah(data.settings.nominalUangMeja) : 'Rp 0',
       r.uangSampah ? formatRupiah(data.settings.nominalUangSampah) : 'Rp 0',
@@ -225,10 +227,20 @@ export const IuranView: React.FC = () => {
         <div className="flex flex-wrap items-center gap-2">
           
           <button
+            id="btn-print-iuran"
+            type="button"
+            onClick={() => window.print()}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-sm transition-colors cursor-pointer"
+          >
+            <Printer className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Cetak</span> Laporan / PDF
+          </button>
+
+          <button
             id="btn-export-iuran-csv"
             type="button"
             onClick={handleExportCSV}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition-colors cursor-pointer"
           >
             <Download className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Export</span> CSV
@@ -302,15 +314,25 @@ export const IuranView: React.FC = () => {
 
       </div>
 
-      {/* Big Interactive Table */}
-      <div className="rounded-2xl border border-slate-800 bg-slate-900/60 overflow-hidden shadow-2xl">
+      {/* Print Page Styles */}
+      <PrintPageStyle landscape={true} />
+
+      {/* Big Interactive Table / Printable Container */}
+      <div id="printable-report-card" className="rounded-2xl border border-slate-800 bg-slate-900/60 overflow-hidden shadow-2xl print:border-none print:bg-white print:p-0 print:shadow-none">
+        
+        {/* Printable Formal Header */}
+        <PrintReportHeader
+          title="IURAN BULANAN WARGA"
+          periode={`${NAMA_BULAN[selectedBulan - 1]} ${selectedTahun}`}
+        />
+
         <div className="overflow-x-auto">
-          <table id="table-iuran-warga" className="w-full text-left border-collapse text-xs whitespace-nowrap sm:whitespace-normal">
+          <table id="table-iuran-warga" className="w-full text-left border-collapse text-xs whitespace-nowrap sm:whitespace-normal print:border print:border-black print:text-black print:text-[9.5pt]">
             <thead>
-              <tr className="bg-slate-950/90 border-b border-slate-800 text-slate-300 font-semibold tracking-wide">
-                <th className="py-3.5 px-3 w-10 text-center">No</th>
-                <th className="py-3.5 px-3 w-20 text-center">Nomor Rumah</th>
-                <th className="py-3.5 px-4 min-w-[140px]">Nama Warga</th>
+              <tr className="bg-slate-950/90 border-b border-slate-800 text-slate-300 font-semibold tracking-wide print:bg-gray-200 print:text-black print:border-black">
+                <th className="py-3.5 px-3 w-10 text-center print:border print:border-black">No</th>
+                <th className="col-nomor-rumah py-3.5 px-3 w-20 text-center print:border print:border-black">Nomor Rumah</th>
+                <th className="col-nama-warga py-3.5 px-4 min-w-[140px] print:border print:border-black">Nama Warga</th>
                 
                 {/* 5 Categories */}
                 <th className="py-3.5 px-2 text-center w-24">
@@ -384,24 +406,24 @@ export const IuranView: React.FC = () => {
                       }`}
                     >
                       {/* No */}
-                      <td className="py-3 px-3 text-center font-mono text-slate-400">
+                      <td className="py-3 px-3 text-center font-mono text-slate-400 print:border print:border-black">
                         {row.index}
                       </td>
 
                       {/* Nomor Rumah */}
-                      <td className="py-3 px-3 text-center">
-                        <span className="inline-block px-2 py-0.5 rounded-lg bg-slate-800 font-mono font-bold text-cyan-300 text-xs border border-slate-700/60">
+                      <td className="col-nomor-rumah py-3 px-3 text-center print:border print:border-black">
+                        <span className="inline-block px-2 py-0.5 rounded-lg bg-slate-800 font-mono font-bold text-cyan-300 text-xs border border-slate-700/60 print:bg-transparent print:text-black print:border-none">
                           {row.warga.nomorRumah}
                         </span>
                       </td>
 
                       {/* Nama Warga */}
-                      <td className="py-3 px-4">
-                        <div className="font-semibold text-white leading-snug">
-                          {row.warga.nama}
+                      <td className="col-nama-warga py-3 px-4 print:border print:border-black">
+                        <div className="font-semibold text-white print:text-black leading-snug">
+                          {row.warga.namaWarga || row.warga.nama}
                         </div>
                         {row.warga.status === 'Tidak Aktif' && (
-                          <span className="text-[10px] text-rose-400">(Warga Tidak Aktif)</span>
+                          <span className="text-[10px] text-rose-400 print:text-gray-600">(Warga Tidak Aktif)</span>
                         )}
                       </td>
 
@@ -607,10 +629,17 @@ export const IuranView: React.FC = () => {
             </tbody>
           </table>
         </div>
+
+        {/* Printable Formal Footer with Signatures */}
+        <PrintReportFooter
+          ketuaRT={data.settings.ketuaRT || 'H. Sugiyanto, S.E.'}
+          bendahara={data.settings.bendahara || 'Bambang Pamungkas, S.Kom.'}
+          lokasi="Semarang"
+        />
       </div>
 
       {/* Section 8: REKAP IURAN (Exact mandatory structure) */}
-      <div id="rekap-iuran-section" className="p-6 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-800 shadow-xl space-y-6">
+      <div id="rekap-iuran-section" className="p-6 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-800 shadow-xl space-y-6 print:hidden">
         
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-4 border-b border-slate-800">
           <div>

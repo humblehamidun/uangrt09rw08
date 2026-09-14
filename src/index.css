@@ -104,4 +104,22 @@
     margin: 0 !important;
     width: 100% !important;
   }
+
+  /* Ensure Nomor Rumah & Nama Warga columns are always rendered during print */
+  .nomor-rumah,
+  .nama-warga,
+  .col-nomor-rumah,
+  .col-nama-warga,
+  th.col-nomor-rumah,
+  td.col-nomor-rumah,
+  th.col-nama-warga,
+  td.col-nama-warga,
+  th.nomor-rumah,
+  td.nomor-rumah,
+  th.nama-warga,
+  td.nama-warga {
+    display: table-cell !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+  }
 }

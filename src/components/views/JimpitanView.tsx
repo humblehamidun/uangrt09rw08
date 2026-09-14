@@ -8,9 +8,11 @@ import {
   Download, 
   CheckCircle2, 
   Clock, 
-  AlertCircle 
+  AlertCircle,
+  Printer
 } from 'lucide-react';
 import { formatRupiah, NAMA_BULAN, downloadCSV, getWeeksInMonth } from '../../utils/format';
+import { PrintReportHeader, PrintReportFooter, PrintPageStyle } from '../common/PrintReportLayout';
 
 export const JimpitanView: React.FC = () => {
   const { data, toggleJimpitanMinggu, getJimpitanForWarga } = useData();
@@ -144,6 +146,9 @@ export const JimpitanView: React.FC = () => {
 
   // Export CSV
   const handleExportCSV = () => {
+    const nominal = data.settings.nominalJimpitan;
+    const maxBulan = 5 * nominal;
+
     const headers = [
       'No',
       'Nomor Rumah',
@@ -154,21 +159,28 @@ export const JimpitanView: React.FC = () => {
       `Minggu 4 (${weeksInfo[3].range})`,
       `Minggu 5 (${weeksInfo[4].range})`,
       'Total Jimpitan',
+      'Tunggakan',
       'Status'
     ];
 
-    const rows = filteredRows.map(r => [
-      r.index,
-      r.warga.nomorRumah,
-      r.warga.nama,
-      r.m1 ? formatRupiah(data.settings.nominalJimpitan) : 'Rp 0',
-      r.m2 ? formatRupiah(data.settings.nominalJimpitan) : 'Rp 0',
-      r.m3 ? formatRupiah(data.settings.nominalJimpitan) : 'Rp 0',
-      r.m4 ? formatRupiah(data.settings.nominalJimpitan) : 'Rp 0',
-      r.m5 ? formatRupiah(data.settings.nominalJimpitan) : 'Rp 0',
-      formatRupiah(r.total),
-      r.status === 'Lengkap' ? '5 Minggu' : `${r.checkedCount} Minggu`
-    ]);
+    let totalTunggakan = 0;
+    const rows = filteredRows.map(r => {
+      const tunggakan = Math.max(0, maxBulan - r.total);
+      totalTunggakan += tunggakan;
+      return [
+        r.index,
+        r.warga.nomorRumah,
+        r.warga.namaWarga || r.warga.nama,
+        r.m1 ? formatRupiah(nominal) : 'Rp 0',
+        r.m2 ? formatRupiah(nominal) : 'Rp 0',
+        r.m3 ? formatRupiah(nominal) : 'Rp 0',
+        r.m4 ? formatRupiah(nominal) : 'Rp 0',
+        r.m5 ? formatRupiah(nominal) : 'Rp 0',
+        formatRupiah(r.total),
+        formatRupiah(tunggakan),
+        r.status === 'Lengkap' ? 'Lengkap (5 Minggu)' : (r.checkedCount > 0 ? `${r.checkedCount} Minggu` : 'Kosong')
+      ];
+    });
 
     // Footer summary row
     rows.push([
@@ -181,6 +193,7 @@ export const JimpitanView: React.FC = () => {
       formatRupiah(rekap.totalM4),
       formatRupiah(rekap.totalM5),
       formatRupiah(rekap.totalJimpitanBulan),
+      formatRupiah(totalTunggakan),
       `${rekap.wargaMembayar} Warga Membayar`
     ]);
 
@@ -215,10 +228,20 @@ export const JimpitanView: React.FC = () => {
         <div className="flex flex-wrap items-center gap-2">
           
           <button
+            id="btn-print-jimpitan"
+            type="button"
+            onClick={() => window.print()}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-semibold shadow-sm transition-colors cursor-pointer"
+          >
+            <Printer className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Cetak</span> Laporan / PDF
+          </button>
+
+          <button
             id="btn-export-jimpitan-csv"
             type="button"
             onClick={handleExportCSV}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition-colors cursor-pointer"
           >
             <Download className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Export</span> CSV
@@ -292,15 +315,25 @@ export const JimpitanView: React.FC = () => {
 
       </div>
 
-      {/* Jimpitan Table */}
-      <div className="rounded-2xl border border-slate-800 bg-slate-900/60 overflow-hidden shadow-xl">
+      {/* Print Page Styles */}
+      <PrintPageStyle landscape={true} />
+
+      {/* Jimpitan Table / Printable Card */}
+      <div id="printable-report-card" className="rounded-2xl border border-slate-800 bg-slate-900/60 overflow-hidden shadow-xl print:border-none print:bg-white print:p-0 print:shadow-none">
+        
+        {/* Printable Formal Header */}
+        <PrintReportHeader
+          title="LAPORAN JIMPITAN KELENG KOIN WARGA"
+          periode={`${NAMA_BULAN[selectedBulan - 1]} ${selectedTahun}`}
+        />
+
         <div className="overflow-x-auto">
-          <table id="table-jimpitan" className="w-full text-left border-collapse text-xs whitespace-nowrap sm:whitespace-normal">
+          <table id="table-jimpitan" className="w-full text-left border-collapse text-xs whitespace-nowrap sm:whitespace-normal print:border print:border-black print:text-black print:text-[9.5pt]">
             <thead>
-              <tr className="bg-slate-950/90 border-b border-slate-800 text-slate-300 font-semibold tracking-wide">
-                <th className="py-3.5 px-3 w-12 text-center">No</th>
-                <th className="py-3.5 px-3 w-24 text-center">Nomor Rumah</th>
-                <th className="py-3.5 px-4 min-w-[140px]">Nama Warga</th>
+              <tr className="bg-slate-950/90 border-b border-slate-800 text-slate-300 font-semibold tracking-wide print:bg-gray-200 print:text-black print:border-black">
+                <th className="py-3.5 px-3 w-12 text-center print:border print:border-black">No</th>
+                <th className="col-nomor-rumah py-3.5 px-3 w-24 text-center print:border print:border-black">Nomor Rumah</th>
+                <th className="col-nama-warga py-3.5 px-4 min-w-[140px] print:border print:border-black">Nama Warga</th>
                 
                 {/* 5 Weeks headers with date ranges */}
                 {weeksInfo.map(w => (
@@ -344,14 +377,14 @@ export const JimpitanView: React.FC = () => {
                         isLengkap ? 'bg-cyan-950/10' : ''
                       }`}
                     >
-                      <td className="py-3 px-3 text-center font-mono text-slate-400">{row.index}</td>
-                      <td className="py-3 px-3 text-center">
-                        <span className="inline-block px-2 py-0.5 rounded-lg bg-slate-800 font-mono font-bold text-cyan-300 text-xs border border-slate-700/60">
+                      <td className="py-3 px-3 text-center font-mono text-slate-400 print:border print:border-black">{row.index}</td>
+                      <td className="col-nomor-rumah py-3 px-3 text-center print:border print:border-black">
+                        <span className="inline-block px-2 py-0.5 rounded-lg bg-slate-800 font-mono font-bold text-cyan-300 text-xs border border-slate-700/60 print:bg-transparent print:text-black print:border-none">
                           {row.warga.nomorRumah}
                         </span>
                       </td>
-                      <td className="py-3 px-4 font-semibold text-white">
-                        {row.warga.nama}
+                      <td className="col-nama-warga py-3 px-4 font-semibold text-white print:text-black print:border print:border-black">
+                        {row.warga.namaWarga || row.warga.nama}
                       </td>
 
                       {/* Minggu 1 */}
@@ -498,10 +531,17 @@ export const JimpitanView: React.FC = () => {
             </tbody>
           </table>
         </div>
+
+        {/* Printable Formal Footer */}
+        <PrintReportFooter
+          ketuaRT={data.settings.ketuaRT || 'H. Sugiyanto, S.E.'}
+          bendahara={data.settings.bendahara || 'Bambang Pamungkas, S.Kom.'}
+          lokasi="Semarang"
+        />
       </div>
 
       {/* Section 12: REKAP JIMPITAN */}
-      <div id="rekap-jimpitan-section" className="p-6 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-800 shadow-xl space-y-6">
+      <div id="rekap-jimpitan-section" className="p-6 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-800 shadow-xl space-y-6 print:hidden">
         
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-4 border-b border-slate-800">
           <div>

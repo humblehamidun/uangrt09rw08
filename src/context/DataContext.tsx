@@ -31,6 +31,7 @@ import {
   ReconciliationReport,
   makeMonthDate
 } from '../utils/bukuKasHelper';
+import { getWargaInfo as resolveWargaInfo, WargaInfo } from '../utils/wargaHelper';
 
 const STORAGE_KEY = 'keuangan_rt09_rw08_v1_store';
 const SESSION_KEY = 'keuangan_rt09_active_session_v1';
@@ -104,6 +105,7 @@ interface DataContextType {
   updateWarga: (id: string, warga: Partial<Omit<Warga, 'id' | 'createdAt'>>) => void;
   deleteWarga: (id: string) => void;
   checkWargaDuplicate: (nomorRumah: string, nama: string, excludeId?: string) => boolean;
+  getWargaInfo: (wargaId?: string | null, fallbackName?: string | null, fallbackRumah?: string | null) => WargaInfo;
   
   // Iuran
   getIuranForWarga: (wargaId: string, bulan: number, tahun: number) => IuranRecord | undefined;
@@ -716,6 +718,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     logAudit('Hapus Warga', `Menghapus warga Rumah ${target?.nomorRumah || ''} - ${target?.nama || ''}`);
     addToast('Data warga berhasil dihapus. Riwayat transaksi tetap tersimpan.', 'info');
   }, [data.warga, addToast, logAudit]);
+
+  // getWargaInfo helper to safely resolve nomorRumah and namaWarga from wargaId
+  const getWargaInfo = useCallback((wargaId?: string | null, fallbackName?: string | null, fallbackRumah?: string | null): WargaInfo => {
+    return resolveWargaInfo(data.warga, wargaId, fallbackName, fallbackRumah);
+  }, [data.warga]);
 
   // Iuran lookup
   const getIuranForWarga = useCallback((wargaId: string, bulan: number, tahun: number): IuranRecord | undefined => {
@@ -2393,6 +2400,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     updateWarga,
     deleteWarga,
     checkWargaDuplicate,
+    getWargaInfo,
     getIuranForWarga,
     toggleIuranCategory,
     updateIuranKeterangan,
@@ -2456,6 +2464,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     updateWarga,
     deleteWarga,
     checkWargaDuplicate,
+    getWargaInfo,
     getIuranForWarga,
     toggleIuranCategory,
     updateIuranKeterangan,

@@ -4,6 +4,7 @@ export interface Warga {
   id: string;
   nomorRumah: string;
   nama: string;
+  namaWarga?: string;
   status: WargaStatus;
   keterangan?: string;
   createdAt: string;
@@ -54,9 +55,11 @@ export interface JimpitanRecord {
 
 export interface DonasiRecord {
   id: string;
+  wargaId?: string;
   tanggal: string; // YYYY-MM-DD
   namaDonatur: string;
   nomorRumah?: string;
+  namaWarga?: string;
   nominal: number;
   keterangan?: string;
   createdAt: string;
@@ -69,6 +72,9 @@ export type BopJenis = 'Pemasukan' | 'Pengeluaran';
 
 export interface BopRecord {
   id: string;
+  wargaId?: string;
+  nomorRumah?: string;
+  namaWarga?: string;
   tanggal: string; // YYYY-MM-DD
   jenis: BopJenis;
   kategori: string;
@@ -140,6 +146,9 @@ export interface PengeluaranDana {
   kategori: PengeluaranDanaKategori | string;
   nominal: number;
   penerima: string;
+  wargaId?: string;
+  nomorRumah?: string;
+  namaWarga?: string;
   periode?: string;
   keterangan?: string;
   keteranganPenggunaanDana?: string;
@@ -218,6 +227,9 @@ export interface BukuKasRecord {
   sourceType: BukuKasSourceType;
   sourceId: string; // Identifier to source item (e.g. iuranId_kas, jimpitanId_minggu1, donasiId, bopId, saldoAwalId, talanganId, pelunasanId)
   subSource?: string; // e.g. kas, uangMeja, uangSampah, danaAcaraTahunan, uangSosial, minggu1..minggu5
+  wargaId?: string;
+  nomorRumah?: string;
+  namaWarga?: string;
   kategori: string; // Display category e.g. "Kas", "Uang Meja", "Talangan Kematian", "Pelunasan Talangan"
   uraian: string; // e.g. "Dana talangan kematian - Budi"
   pemasukan: number;

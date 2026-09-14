@@ -132,6 +132,8 @@ export function syncAllSourcesToBukuKas(
         noBukti,
         sourceType: 'saldo_awal',
         sourceId: sa.id,
+        nomorRumah: '-',
+        namaWarga: '-',
         kategori: 'Saldo Awal',
         uraian: sa.keterangan || 'Saldo Awal Kas RT',
         pemasukan: sa.nominal || 0,
@@ -166,7 +168,9 @@ export function syncAllSourcesToBukuKas(
     for (const record of data.iuran) {
       const warga = wargaMap.get(record.wargaId);
       const rumahStr = warga ? `Rumah ${warga.nomorRumah}` : 'Rumah -';
-      const namaStr = warga ? warga.nama : 'Warga';
+      const namaStr = warga ? (warga.namaWarga || warga.nama) : 'Warga';
+      const nomorRumahVal = warga?.nomorRumah || '-';
+      const namaWargaVal = warga ? (warga.namaWarga || warga.nama) : '-';
       
       // Determine date for the iuran transaction (uses record.createdAt or 1st of month/year)
       const recordDate = record.createdAt 
@@ -190,6 +194,9 @@ export function syncAllSourcesToBukuKas(
             sourceType: 'iuran',
             sourceId: subId,
             subSource: cat.key,
+            wargaId: record.wargaId,
+            nomorRumah: nomorRumahVal,
+            namaWarga: namaWargaVal,
             kategori: `Iuran - ${cat.label}`,
             uraian: `Pembayaran Iuran ${cat.label} - ${rumahStr} - ${namaStr}`,
             pemasukan: nominal,
@@ -232,7 +239,9 @@ export function syncAllSourcesToBukuKas(
     for (const record of data.jimpitan) {
       const warga = wargaMap.get(record.wargaId);
       const rumahStr = warga ? `Rumah ${warga.nomorRumah}` : 'Rumah -';
-      const namaStr = warga ? warga.nama : 'Warga';
+      const namaStr = warga ? (warga.namaWarga || warga.nama) : 'Warga';
+      const nomorRumahVal = warga?.nomorRumah || '-';
+      const namaWargaVal = warga ? (warga.namaWarga || warga.nama) : '-';
 
       for (const w of weeks) {
         const isChecked = Boolean(record[w.key]);
@@ -257,6 +266,9 @@ export function syncAllSourcesToBukuKas(
             sourceType: 'jimpitan',
             sourceId: subId,
             subSource: w.key,
+            wargaId: record.wargaId,
+            nomorRumah: nomorRumahVal,
+            namaWarga: namaWargaVal,
             kategori: 'Jimpitan',
             uraian: `Jimpitan ${w.label} - ${rumahStr} - ${namaStr}`,
             pemasukan: nominal,
@@ -292,14 +304,30 @@ export function syncAllSourcesToBukuKas(
       const existing = existingMap.get(sourceKey);
       const noBukti = existing?.noBukti || generateNoBukti('DON', record.tanggal, [...existingBukuKas, ...resultList]);
 
+      // Resolve matching warga if available
+      let matchedWarga: Warga | undefined;
+      if (record.wargaId) {
+        matchedWarga = wargaMap.get(record.wargaId);
+      } else if (record.nomorRumah) {
+        matchedWarga = data.warga.find(w => w.nomorRumah.toLowerCase().trim() === record.nomorRumah?.toLowerCase().trim());
+      } else if (record.namaDonatur) {
+        matchedWarga = data.warga.find(w => (w.namaWarga || w.nama).toLowerCase().trim() === record.namaDonatur.toLowerCase().trim());
+      }
+
+      const donaturRumah = matchedWarga?.nomorRumah || record.nomorRumah || '-';
+      const donaturNama = matchedWarga ? (matchedWarga.namaWarga || matchedWarga.nama) : (record.namaDonatur || '-');
+
       resultList.push({
         id: existing?.id || `bk-don-${record.id}`,
         tanggal: record.tanggal,
         noBukti,
         sourceType: 'donasi',
         sourceId: record.id,
+        wargaId: matchedWarga?.id || record.wargaId,
+        nomorRumah: donaturRumah,
+        namaWarga: donaturNama,
         kategori: 'Donasi',
-        uraian: `Donasi dari ${record.namaDonatur}${record.nomorRumah ? ` (Rumah ${record.nomorRumah})` : ''}`,
+        uraian: `Donasi dari ${donaturNama}${donaturRumah !== '-' ? ` (Rumah ${donaturRumah})` : ''}`,
         pemasukan: record.nominal || 0,
         pengeluaran: 0,
         saldo: 0,
@@ -322,12 +350,22 @@ export function syncAllSourcesToBukuKas(
       const noBukti = existing?.noBukti || generateNoBukti('BOP', record.tanggal, [...existingBukuKas, ...resultList]);
       const isPemasukan = record.jenis === 'Pemasukan';
 
+      let matchedWarga: Warga | undefined;
+      if (record.wargaId) {
+        matchedWarga = wargaMap.get(record.wargaId);
+      } else if (record.namaWarga) {
+        matchedWarga = data.warga.find(w => (w.namaWarga || w.nama).toLowerCase().trim() === record.namaWarga?.toLowerCase().trim());
+      }
+
       resultList.push({
         id: existing?.id || `bk-bop-${record.id}`,
         tanggal: record.tanggal,
         noBukti,
         sourceType: 'bop',
         sourceId: record.id,
+        wargaId: matchedWarga?.id || record.wargaId,
+        nomorRumah: matchedWarga?.nomorRumah || record.nomorRumah || '-',
+        namaWarga: matchedWarga ? (matchedWarga.namaWarga || matchedWarga.nama) : (record.namaWarga || '-'),
         kategori: `BOP - ${record.kategori}`,
         uraian: record.uraian || `Operasional ${record.kategori}`,
         pemasukan: isPemasukan ? (record.nominal || 0) : 0,
@@ -352,6 +390,10 @@ export function syncAllSourcesToBukuKas(
       const noBukti = existing?.noBukti || generateNoBukti('TAL', record.tanggal, [...existingBukuKas, ...resultList]);
       const isActive = record.statusAktif === 'Aktif';
 
+      const matchedWarga = record.wargaId ? wargaMap.get(record.wargaId) : data.warga.find(w => (w.namaWarga || w.nama).toLowerCase().trim() === record.namaPeminjam.toLowerCase().trim());
+      const rumah = matchedWarga?.nomorRumah || record.nomorRumah || '-';
+      const nama = matchedWarga ? (matchedWarga.namaWarga || matchedWarga.nama) : record.namaPeminjam;
+
       if (isActive) {
         resultList.push({
           id: existing?.id || `bk-tal-${record.id}`,
@@ -359,8 +401,11 @@ export function syncAllSourcesToBukuKas(
           noBukti,
           sourceType: 'dana_talangan',
           sourceId: record.id,
+          wargaId: record.wargaId || matchedWarga?.id,
+          nomorRumah: rumah,
+          namaWarga: nama,
           kategori: 'Talangan Kematian',
-          uraian: `Dana talangan kematian - ${record.namaPeminjam} (Rumah ${record.nomorRumah})`,
+          uraian: `Dana talangan kematian - ${nama}${rumah !== '-' ? ` (Rumah ${rumah})` : ''}`,
           pemasukan: 0,
           pengeluaran: record.jumlahTalangan || 0,
           saldo: 0,
@@ -413,6 +458,9 @@ export function syncAllSourcesToBukuKas(
           noBukti,
           sourceType: 'pelunasan_talangan',
           sourceId: record.id,
+          wargaId: parentTalangan?.wargaId,
+          nomorRumah: parentTalangan?.nomorRumah || '-',
+          namaWarga: peminjamName,
           kategori: 'Pelunasan Talangan',
           uraian: `Pelunasan talangan - ${peminjamName}${rumahStr}`,
           pemasukan: record.jumlah || 0,
@@ -453,6 +501,19 @@ export function syncAllSourcesToBukuKas(
       const uraianDesc = record.keteranganPenggunaanDana || record.keterangan || `Pengeluaran ${record.kategori}`;
       const penerimaStr = record.penerima ? ` (${record.penerima})` : '';
 
+      // Check if relates to a citizen
+      let matchedWarga: Warga | undefined;
+      if (record.wargaId) {
+        matchedWarga = wargaMap.get(record.wargaId);
+      } else if (record.namaWarga) {
+        matchedWarga = data.warga.find(w => (w.namaWarga || w.nama).toLowerCase().trim() === record.namaWarga?.toLowerCase().trim());
+      } else if (record.penerima) {
+        matchedWarga = data.warga.find(w => (w.namaWarga || w.nama).toLowerCase().trim() === record.penerima?.toLowerCase().trim());
+      }
+
+      const rumahVal = matchedWarga?.nomorRumah || record.nomorRumah || '-';
+      const namaVal = matchedWarga ? (matchedWarga.namaWarga || matchedWarga.nama) : (record.namaWarga || record.penerima || '-');
+
       if (isActive) {
         resultList.push({
           id: existing?.id || `bk-out-${record.id}`,
@@ -460,6 +521,9 @@ export function syncAllSourcesToBukuKas(
           noBukti,
           sourceType: 'pengeluaran_dana',
           sourceId: record.id,
+          wargaId: matchedWarga?.id || record.wargaId,
+          nomorRumah: rumahVal,
+          namaWarga: namaVal,
           kategori: record.kategori,
           uraian: `${uraianDesc}${penerimaStr}`,
           pemasukan: 0,
@@ -479,7 +543,7 @@ export function syncAllSourcesToBukuKas(
           status: 'Dibatalkan',
           cancelledAt: record.cancelledAt || nowIso,
           cancelledBy: record.cancelledBy || defaultOfficer,
-          cancelReason: record.cancelReason || 'Pengeluaran dana dibatalkan oleh pengguna',
+          cancelReason: record.cancelReason || 'Pengeluaran dibatalkan oleh pengguna',
           updatedAt: nowIso,
           updatedBy: defaultOfficer,
         });
