@@ -24,33 +24,84 @@
   background: #94A3B8;
 }
 
+.print-only {
+  display: none;
+}
+
 @media print {
+  @page {
+    size: A4 portrait;
+    margin: 12mm 10mm 15mm 10mm;
+  }
+
   body {
     background-color: #ffffff !important;
     color: #000000 !important;
-    font-size: 10pt;
+    font-size: 9.5pt;
+    line-height: 1.35;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 
-  header, nav, aside, .no-print, .print\:hidden {
+  /* Completely hide all navigation, headers, sidebars, modals backdrop, and interactive elements */
+  header, 
+  nav, 
+  aside, 
+  #app-header,
+  #app-sidebar,
+  #mobile-bottom-nav,
+  #mobile-nav-backdrop,
+  .no-print, 
+  .print\:hidden {
     display: none !important;
+    visibility: hidden !important;
   }
 
   main {
     padding: 0 !important;
     margin: 0 !important;
     width: 100% !important;
+    max-width: 100% !important;
   }
 
-  #printable-report-card {
+  .print-only {
+    display: block !important;
+    visibility: visible !important;
+  }
+
+  .print-avoid-break,
+  .signature-section {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  table {
+    width: 100% !important;
+    page-break-inside: auto;
+    border-collapse: collapse !important;
+  }
+
+  tr {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  thead {
+    display: table-header-group !important;
+  }
+
+  tfoot {
+    display: table-footer-group !important;
+  }
+
+  #printable-report-card,
+  .printable-document {
     background-color: #ffffff !important;
     color: #000000 !important;
     border: none !important;
     box-shadow: none !important;
     padding: 0 !important;
-  }
-
-  * {
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
+    margin: 0 !important;
+    width: 100% !important;
   }
 }

@@ -27,10 +27,14 @@ import {
   X,
   Layers,
   ChevronRight,
-  Sparkles
+  Sparkles,
+  FileDown,
+  FileSpreadsheet,
+  PenTool,
+  Check
 } from 'lucide-react';
 import { ConfirmModal } from '../common/ConfirmModal';
-import { formatRupiah, formatTanggalIndonesia, downloadCSV } from '../../utils/format';
+import { formatRupiah, formatTanggalIndonesia, downloadCSV, terbilang, NAMA_BULAN } from '../../utils/format';
 
 export const DAFTAR_KATEGORI_PENGELUARAN: PengeluaranDanaKategori[] = [
   'Petugas Sampah',
@@ -100,8 +104,26 @@ export const PengeluaranDanaView: React.FC<PengeluaranDanaViewProps> = ({ onNavi
   // Detail Modal
   const [detailRecord, setDetailRecord] = useState<PengeluaranDana | null>(null);
 
-  // Laporan Khusus Subtab
-  const [laporanSubTab, setLaporanSubTab] = useState<'umum' | 'sampah' | 'uang_meja' | 'lainnya'>('umum');
+  // Laporan Khusus & Cetak Settings & Filters
+  const [reportCategoryFilter, setReportCategoryFilter] = useState<string>('All');
+  const [reportBulanFilter, setReportBulanFilter] = useState<string>('All');
+  const [reportTahunFilter, setReportTahunFilter] = useState<string>(String(currentYear));
+  const [reportStatusFilter, setReportStatusFilter] = useState<'Aktif' | 'All'>('Aktif');
+  const [signerKetua, setSignerKetua] = useState<string>(data.settings.ketuaRT || 'H. Sugiyanto, S.E.');
+  const [signerBendahara, setSignerBendahara] = useState<string>(data.settings.bendahara || 'Bambang Pamungkas, S.Kom.');
+  const [showSignerSettings, setShowSignerSettings] = useState(false);
+
+  // Individual Receipt Voucher Modal
+  const [receiptRecord, setReceiptRecord] = useState<PengeluaranDana | null>(null);
+
+  // Legacy Laporan Subtab for quick tabs
+  const [laporanSubTab, setLaporanSubTab] = useState<'semua' | 'sampah' | 'uang_meja' | 'lainnya'>('semua');
+
+  // Sync settings when data changes
+  React.useEffect(() => {
+    if (data.settings?.ketuaRT) setSignerKetua(data.settings.ketuaRT);
+    if (data.settings?.bendahara) setSignerBendahara(data.settings.bendahara);
+  }, [data.settings?.ketuaRT, data.settings?.bendahara]);
 
   // Available Years
   const availableYears = useMemo(() => {
@@ -360,21 +382,32 @@ export const PengeluaranDanaView: React.FC<PengeluaranDanaViewProps> = ({ onNavi
     }
   };
 
-  // Export CSV
-  const handleExportCSV = (reportType: string = 'semua') => {
-    let exportRecords = filteredList;
-    let fileName = `pengeluaran_dana_rt09_${new Date().toISOString().slice(0, 10)}.csv`;
+  // Records for Laporan Khusus & Cetak
+  const reportRecords = useMemo(() => {
+    return (data.pengeluaranDana || []).filter(item => {
+      if (reportStatusFilter === 'Aktif' && item.status !== 'Aktif') return false;
+      if (reportCategoryFilter !== 'All' && item.kategori !== reportCategoryFilter) return false;
+      if (item.tanggal) {
+        const [y, m] = item.tanggal.split('-');
+        if (reportTahunFilter !== 'All' && y !== reportTahunFilter) return false;
+        if (reportBulanFilter !== 'All' && String(parseInt(m, 10)) !== reportBulanFilter) return false;
+      }
+      return true;
+    }).sort((a, b) => new Date(a.tanggal).getTime() - new Date(b.tanggal).getTime());
+  }, [data.pengeluaranDana, reportStatusFilter, reportCategoryFilter, reportTahunFilter, reportBulanFilter]);
 
-    if (reportType === 'sampah') {
-      exportRecords = (data.pengeluaranDana || []).filter(p => p.kategori === 'Petugas Sampah');
-      fileName = `laporan_pembayaran_sampah_rt09_${new Date().toISOString().slice(0, 10)}.csv`;
-    } else if (reportType === 'uang_meja') {
-      exportRecords = (data.pengeluaranDana || []).filter(p => p.kategori === 'Uang Meja');
-      fileName = `laporan_uang_meja_rt09_${new Date().toISOString().slice(0, 10)}.csv`;
-    } else if (reportType === 'lainnya') {
-      exportRecords = (data.pengeluaranDana || []).filter(p => p.kategori === 'Lainnya');
-      fileName = `laporan_pengeluaran_lainnya_rt09_${new Date().toISOString().slice(0, 10)}.csv`;
-    }
+  const reportTotal = useMemo(() => {
+    return reportRecords.reduce((acc, curr) => acc + (curr.nominal || 0), 0);
+  }, [reportRecords]);
+
+  // Export CSV
+  const handleExportCSV = (source: 'laporan' | 'daftar' = 'laporan') => {
+    const exportRecords = source === 'laporan' ? reportRecords : filteredList;
+    const catLabel = reportCategoryFilter === 'All' ? 'Semua_Kategori' : reportCategoryFilter.replace(/\s+/g, '_');
+    const periodLabel = reportBulanFilter === 'All' 
+      ? `Tahun_${reportTahunFilter}` 
+      : `Bulan_${reportBulanFilter}_${reportTahunFilter}`;
+    const fileName = `Laporan_Pengeluaran_Dana_RT09_${catLabel}_${periodLabel}_${new Date().toISOString().slice(0, 10)}.csv`;
 
     const headers = [
       'No',
@@ -385,7 +418,7 @@ export const PengeluaranDanaView: React.FC<PengeluaranDanaViewProps> = ({ onNavi
       'Periode',
       'Keterangan Penggunaan',
       'Nominal (Rp)',
-      'Petugas',
+      'Petugas Pencatat',
       'Status',
       'Alasan Batal'
     ];
@@ -405,35 +438,24 @@ export const PengeluaranDanaView: React.FC<PengeluaranDanaViewProps> = ({ onNavi
     ]);
 
     downloadCSV(fileName, headers, rows);
-    logAudit('Export Pengeluaran Dana', `Mengekspor data laporan pengeluaran dana (${reportType}) ke CSV`);
+    logAudit('Export Pengeluaran Dana', `Mengekspor data laporan pengeluaran dana ke CSV (${exportRecords.length} baris)`);
     addToast('File CSV berhasil diunduh.', 'success');
   };
 
-  // Handle Print
-  const handlePrint = (reportType: string = 'semua') => {
-    logAudit('Cetak Pengeluaran Dana', `Mencetak dokumen laporan pengeluaran dana (${reportType})`);
-    window.print();
+  // Handle Print Report
+  const handlePrintReport = () => {
+    logAudit('Cetak Pengeluaran Dana', `Mencetak dokumen laporan pertanggungjawaban pengeluaran dana RT (${reportRecords.length} transaksi)`);
+    addToast("Membuka dialog cetak. Pilih 'Simpan sebagai PDF' (Save as PDF) di tujuan printer jika ingin mengunduh PDF.", 'info');
+    setTimeout(() => {
+      window.print();
+    }, 150);
   };
 
-  // Records for Sub-reports in Laporan Tab
-  const laporanUmumRecords = useMemo(() => {
-    return filteredList.filter(p => p.status === 'Aktif');
-  }, [filteredList]);
-
-  const laporanSampahRecords = useMemo(() => {
-    return (data.pengeluaranDana || []).filter(p => p.kategori === 'Petugas Sampah' && p.status === 'Aktif')
-      .sort((a, b) => new Date(b.tanggal).getTime() - new Date(a.tanggal).getTime());
-  }, [data.pengeluaranDana]);
-
-  const laporanUangMejaRecords = useMemo(() => {
-    return (data.pengeluaranDana || []).filter(p => p.kategori === 'Uang Meja' && p.status === 'Aktif')
-      .sort((a, b) => new Date(b.tanggal).getTime() - new Date(a.tanggal).getTime());
-  }, [data.pengeluaranDana]);
-
-  const laporanLainnyaRecords = useMemo(() => {
-    return (data.pengeluaranDana || []).filter(p => p.kategori === 'Lainnya' && p.status === 'Aktif')
-      .sort((a, b) => new Date(b.tanggal).getTime() - new Date(a.tanggal).getTime());
-  }, [data.pengeluaranDana]);
+  // Handle Print Receipt Voucher
+  const handlePrintReceipt = (item: PengeluaranDana) => {
+    setReceiptRecord(item);
+    logAudit('Cetak Bukti Pengeluaran', `Membuka bukti kas keluar nomor ${item.noBukti}`);
+  };
 
   return (
     <div id="pengeluaran-dana-view" className="space-y-6 pb-16">
@@ -463,19 +485,26 @@ export const PengeluaranDanaView: React.FC<PengeluaranDanaViewProps> = ({ onNavi
             <button
               id="btn-cetak-pengeluaran"
               type="button"
-              onClick={() => handlePrint(activeMainTab === 'laporan' ? laporanSubTab : 'semua')}
-              className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-medium text-[#374151] bg-white border border-[#D1D5DB] rounded-lg hover:bg-slate-50 transition-colors shadow-xs"
-              title="Cetak Laporan Resmi"
+              onClick={() => {
+                if (activeMainTab !== 'laporan') {
+                  setActiveMainTab('laporan');
+                  addToast('Beralih ke format Laporan Khusus & Cetak Resmi.', 'info');
+                } else {
+                  handlePrintReport();
+                }
+              }}
+              className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-[#1E5AA8] bg-blue-50/70 border border-blue-200 rounded-lg hover:bg-blue-100/70 transition-colors shadow-2xs"
+              title="Cetak Laporan / Simpan PDF"
             >
-              <Printer className="w-4 h-4 text-[#6B7280]" />
-              <span>Cetak Laporan</span>
+              <Printer className="w-4 h-4 text-[#1E5AA8]" />
+              <span>Cetak Laporan / PDF</span>
             </button>
 
             <button
               id="btn-export-pengeluaran"
               type="button"
-              onClick={() => handleExportCSV(activeMainTab === 'laporan' ? laporanSubTab : 'semua')}
-              className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-medium text-[#374151] bg-white border border-[#D1D5DB] rounded-lg hover:bg-slate-50 transition-colors shadow-xs"
+              onClick={() => handleExportCSV(activeMainTab === 'laporan' ? 'laporan' : 'daftar')}
+              className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-medium text-[#374151] bg-white border border-[#D1D5DB] rounded-lg hover:bg-slate-50 transition-colors shadow-2xs"
               title="Ekspor Data ke CSV"
             >
               <Download className="w-4 h-4 text-[#6B7280]" />
@@ -527,7 +556,7 @@ export const PengeluaranDanaView: React.FC<PengeluaranDanaViewProps> = ({ onNavi
           </button>
 
           <button
-            id="tab-laporan-khusus"
+            id="tab-laporan-cetak"
             type="button"
             onClick={() => setActiveMainTab('laporan')}
             className={`px-3.5 py-1.5 text-xs font-medium rounded-lg transition-colors flex items-center gap-2 ${
@@ -537,7 +566,7 @@ export const PengeluaranDanaView: React.FC<PengeluaranDanaViewProps> = ({ onNavi
             }`}
           >
             <Printer className="w-3.5 h-3.5" />
-            <span>Laporan Khusus & Cetak</span>
+            <span>Laporan Khusus & Cetak ({reportRecords.length})</span>
           </button>
         </div>
       </div>
@@ -830,9 +859,18 @@ export const PengeluaranDanaView: React.FC<PengeluaranDanaViewProps> = ({ onNavi
                                 type="button"
                                 onClick={() => setDetailRecord(item)}
                                 className="p-1 rounded hover:bg-slate-200 text-[#4B5563]"
-                                title="Lihat Detail"
+                                title="Lihat Detail Transaksi"
                               >
                                 <Info className="w-3.5 h-3.5" />
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => handlePrintReceipt(item)}
+                                className="p-1 rounded hover:bg-blue-100 text-[#1E5AA8]"
+                                title="Cetak Bukti Kas Keluar (Voucher)"
+                              >
+                                <Printer className="w-3.5 h-3.5" />
                               </button>
 
                               {canManage && !isCancelled && (
@@ -966,304 +1004,336 @@ export const PengeluaranDanaView: React.FC<PengeluaranDanaViewProps> = ({ onNavi
       {/* TAB 3: LAPORAN KHUSUS & CETAK RESMI */}
       {activeMainTab === 'laporan' && (
         <div className="space-y-6">
-          {/* Subtabs for specific reports */}
-          <div className="bg-white rounded-xl border border-[#E5E7EB] p-4 shadow-xs no-print">
-            <div className="flex items-center flex-wrap justify-between gap-3">
+          {/* Controls & Filter Panel (Hidden during Print) */}
+          <div className="bg-white rounded-xl border border-[#E5E7EB] p-4 shadow-xs no-print space-y-4">
+            
+            {/* Top Toolbar: Primary Actions */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
               <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setLaporanSubTab('umum')}
-                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
-                    laporanSubTab === 'umum'
-                      ? 'bg-[#1E5AA8] text-white'
-                      : 'bg-slate-100 text-[#4B5563] hover:bg-slate-200'
-                  }`}
-                >
-                  Laporan Umum
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setLaporanSubTab('sampah')}
-                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
-                    laporanSubTab === 'sampah'
-                      ? 'bg-[#1E5AA8] text-white'
-                      : 'bg-slate-100 text-[#4B5563] hover:bg-slate-200'
-                  }`}
-                >
-                  Pembayaran Petugas Sampah
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setLaporanSubTab('uang_meja')}
-                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
-                    laporanSubTab === 'uang_meja'
-                      ? 'bg-[#1E5AA8] text-white'
-                      : 'bg-slate-100 text-[#4B5563] hover:bg-slate-200'
-                  }`}
-                >
-                  Penggunaan Uang Meja
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setLaporanSubTab('lainnya')}
-                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
-                    laporanSubTab === 'lainnya'
-                      ? 'bg-[#1E5AA8] text-white'
-                      : 'bg-slate-100 text-[#4B5563] hover:bg-slate-200'
-                  }`}
-                >
-                  Pengeluaran Lainnya
-                </button>
+                <div className="w-8 h-8 rounded-lg bg-blue-100 text-[#1E5AA8] flex items-center justify-center font-bold">
+                  <Printer className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-[#1F2937]">Laporan Pertanggungjawaban Kas RT</h3>
+                  <p className="text-[11px] text-[#6B7280]">Format dokumen cetak A4 resmi dengan kop surat RT 09 RW 08 dan kolom tanda tangan</p>
+                </div>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center flex-wrap gap-2">
                 <button
                   type="button"
-                  onClick={() => handlePrint(laporanSubTab)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-[#1E5AA8] hover:bg-[#164785] rounded-lg shadow-xs"
+                  onClick={() => setShowSignerSettings(!showSignerSettings)}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors ${
+                    showSignerSettings 
+                      ? 'bg-amber-50 text-amber-800 border-amber-300'
+                      : 'bg-white text-[#4B5563] border-[#D1D5DB] hover:bg-slate-50'
+                  }`}
+                  title="Sesuaikan nama Ketua RT dan Bendahara pada dokumen cetak"
+                >
+                  <PenTool className="w-3.5 h-3.5" />
+                  <span>Atur Tanda Tangan</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleExportCSV('laporan')}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-[#374151] bg-white border border-[#D1D5DB] rounded-lg hover:bg-slate-50 shadow-2xs transition-colors"
+                  title="Unduh data laporan dalam format CSV (Excel/Spreadsheet)"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Ekspor CSV</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handlePrintReport}
+                  className="inline-flex items-center gap-1.5 px-4 py-1.5 text-xs font-bold text-white bg-[#1E5AA8] hover:bg-[#164785] rounded-lg shadow-xs transition-colors"
+                  title="Cetak dokumen resmi atau simpan sebagai PDF"
                 >
                   <Printer className="w-3.5 h-3.5" />
-                  <span>Cetak Dokumen Ini</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleExportCSV(laporanSubTab)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-[#374151] bg-white border border-[#D1D5DB] rounded-lg hover:bg-slate-50"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>CSV</span>
+                  <span>Cetak / Simpan PDF</span>
                 </button>
               </div>
+            </div>
+
+            {/* Expandable Signatory Names Customizer */}
+            {showSignerSettings && (
+              <div className="p-3.5 rounded-lg bg-amber-50/70 border border-amber-200 text-xs space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-amber-900 flex items-center gap-1.5">
+                    <PenTool className="w-3.5 h-3.5 text-amber-700" />
+                    Penyesuaian Nama Penandatangan Dokumen Resmi
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSignerKetua(data.settings?.ketuaRT || 'H. Sugiyanto, S.E.');
+                      setSignerBendahara(data.settings?.bendahara || 'Bambang Pamungkas, S.Kom.');
+                    }}
+                    className="text-[11px] font-semibold text-amber-800 hover:underline"
+                  >
+                    Reset ke Nama Standar RT
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">
+                      Nama Ketua RT 09 (Kiri):
+                    </label>
+                    <input
+                      type="text"
+                      value={signerKetua}
+                      onChange={e => setSignerKetua(e.target.value)}
+                      placeholder="Nama Lengkap Ketua RT..."
+                      className="w-full px-3 py-1.5 text-xs bg-white rounded-md border border-amber-300 focus:outline-none focus:ring-1 focus:ring-[#1E5AA8]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">
+                      Nama Bendahara RT 09 (Kanan):
+                    </label>
+                    <input
+                      type="text"
+                      value={signerBendahara}
+                      onChange={e => setSignerBendahara(e.target.value)}
+                      placeholder="Nama Lengkap Bendahara..."
+                      className="w-full px-3 py-1.5 text-xs bg-white rounded-md border border-amber-300 focus:outline-none focus:ring-1 focus:ring-[#1E5AA8]"
+                    />
+                  </div>
+                </div>
+                <p className="text-[10px] text-amber-700 italic">
+                  * Perubahan nama ini langsung diterapkan pada lembar tanda tangan dokumen di bawah tanpa mengubah pengaturan global.
+                </p>
+              </div>
+            )}
+
+            {/* Filter Controls Row */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+              {/* Filter Kategori */}
+              <div>
+                <label className="block font-semibold text-[#4B5563] mb-1">
+                  Kategori Pengeluaran:
+                </label>
+                <select
+                  value={reportCategoryFilter}
+                  onChange={e => setReportCategoryFilter(e.target.value)}
+                  className="w-full px-2.5 py-1.5 rounded-lg border border-[#D1D5DB] bg-white focus:outline-none focus:ring-1 focus:ring-[#1E5AA8]"
+                >
+                  <option value="All">-- Semua Kategori (Rekap Lengkap) --</option>
+                  {DAFTAR_KATEGORI_PENGELUARAN.map(kat => (
+                    <option key={kat} value={kat}>{kat}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Filter Bulan */}
+              <div>
+                <label className="block font-semibold text-[#4B5563] mb-1">
+                  Periode Bulan:
+                </label>
+                <select
+                  value={reportBulanFilter}
+                  onChange={e => setReportBulanFilter(e.target.value)}
+                  className="w-full px-2.5 py-1.5 rounded-lg border border-[#D1D5DB] bg-white focus:outline-none focus:ring-1 focus:ring-[#1E5AA8]"
+                >
+                  <option value="All">-- Semua Bulan --</option>
+                  {NAMA_BULAN.map((bulan, idx) => (
+                    <option key={bulan} value={String(idx + 1)}>{idx + 1}. {bulan}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Filter Tahun */}
+              <div>
+                <label className="block font-semibold text-[#4B5563] mb-1">
+                  Tahun Anggaran:
+                </label>
+                <select
+                  value={reportTahunFilter}
+                  onChange={e => setReportTahunFilter(e.target.value)}
+                  className="w-full px-2.5 py-1.5 rounded-lg border border-[#D1D5DB] bg-white focus:outline-none focus:ring-1 focus:ring-[#1E5AA8]"
+                >
+                  <option value="All">-- Semua Tahun --</option>
+                  {availableYears.map(yr => (
+                    <option key={yr} value={yr}>Tahun {yr}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Filter Status Transaksi */}
+              <div>
+                <label className="block font-semibold text-[#4B5563] mb-1">
+                  Status Transaksi:
+                </label>
+                <select
+                  value={reportStatusFilter}
+                  onChange={e => setReportStatusFilter(e.target.value as 'Aktif' | 'All')}
+                  className="w-full px-2.5 py-1.5 rounded-lg border border-[#D1D5DB] bg-white focus:outline-none focus:ring-1 focus:ring-[#1E5AA8]"
+                >
+                  <option value="Aktif">Hanya Transaksi Sah / Aktif (Standar)</option>
+                  <option value="All">Semua Termasuk Dibatalkan</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Quick Helper Banner */}
+            <div className="p-2.5 rounded-lg bg-blue-50/60 border border-blue-200/60 text-[11px] text-[#1E5AA8] flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Info className="w-4 h-4 flex-shrink-0" />
+                <span>
+                  <strong>Petunjuk Ekspor PDF:</strong> Klik tombol <strong>Cetak / Simpan PDF</strong>. Pada dialog printer browser, pilih tujuan <strong>"Save as PDF" / "Simpan sebagai PDF"</strong>. Seluruh menu samping, header, dan tombol disembunyikan secara otomatis.
+                </span>
+              </div>
+              <span className="font-mono font-bold whitespace-nowrap ml-2">
+                {reportRecords.length} Transaksi Terpilih
+              </span>
             </div>
           </div>
 
           {/* Printable Official Document Sheet */}
-          <div className="bg-white rounded-xl border border-[#E5E7EB] p-8 shadow-sm print:p-0 print:border-none print:shadow-none">
+          <div 
+            id="printable-report-card" 
+            className="printable-document bg-white rounded-xl border border-[#E5E7EB] p-8 sm:p-10 shadow-sm print:p-0 print:border-none print:shadow-none print:m-0 print:w-full"
+          >
             
-            {/* Civic Official Header */}
-            <div className="text-center pb-4 mb-5 border-b-2 border-slate-900 space-y-1">
-              <h2 className="text-base font-bold tracking-wide uppercase text-slate-900">
-                Pemerintah Kota Semarang • Kecamatan Genuk
+            {/* Civic Official Header (Kop Surat Resmi RT 09 RW 08) */}
+            <div className="text-center pb-3 mb-5 border-b-4 border-double border-slate-900 space-y-1">
+              <h2 className="text-sm font-bold tracking-widest uppercase text-slate-800">
+                PEMERINTAH KOTA SEMARANG • KECAMATAN GENUK
               </h2>
-              <h1 className="text-lg font-extrabold tracking-wide uppercase text-slate-900">
-                Rukun Tetangga 09 Rukun Warga 08
+              <h1 className="text-xl font-black tracking-wide uppercase text-slate-900">
+                RUKUN TETANGGA 09 RUKUN WARGA 08
               </h1>
-              <p className="text-xs text-slate-700">
-                Kelurahan Bangetayu Wetan, Kecamatan Genuk, Kota Semarang, Jawa Tengah
-              </p>
-            </div>
-
-            {/* Document Title */}
-            <div className="text-center my-4 space-y-1">
-              <h3 className="text-base font-bold underline uppercase text-slate-900">
-                {laporanSubTab === 'umum' && 'LAPORAN REKAPITULASI PENGELUARAN DANA KAS RT'}
-                {laporanSubTab === 'sampah' && 'LAPORAN PEMBAYARAN PETUGAS SAMPAH RT 09 RW 08'}
-                {laporanSubTab === 'uang_meja' && 'LAPORAN PENGGUNAAN DANA UANG MEJA RAPAT RT'}
-                {laporanSubTab === 'lainnya' && 'LAPORAN PENGELUARAN DANA LAINNYA'}
+              <h3 className="text-xs font-extrabold uppercase text-slate-800 tracking-wider">
+                KELURAHAN BANGETAYU WETAN
               </h3>
-              <p className="text-xs text-slate-600">
-                Dicetak pada tanggal: {formatTanggalIndonesia(today.toISOString().slice(0, 10))}
+              <p className="text-[11px] text-slate-600">
+                Sekretariat: Balai Warga RT 09 RW 08 Bangetayu Wetan, Genuk, Kota Semarang 50115
               </p>
             </div>
 
-            {/* Sub-report 1: Umum */}
-            {laporanSubTab === 'umum' && (
-              <div className="overflow-x-auto my-4">
-                <table className="w-full text-left text-xs border border-slate-300">
-                  <thead className="bg-slate-100 text-slate-800 font-bold border-b border-slate-300">
+            {/* Document Title & Period Metadata */}
+            <div className="text-center my-4 space-y-1.5">
+              <h3 className="text-base font-bold underline uppercase text-slate-900 tracking-wide">
+                {reportCategoryFilter === 'All' 
+                  ? 'LAPORAN PERTANGGUNGJAWABAN PENGELUARAN DANA KAS RT'
+                  : `LAPORAN PENGELUARAN DANA - BIDANG ${reportCategoryFilter.toUpperCase()}`
+                }
+              </h3>
+              <p className="text-xs font-semibold text-slate-700">
+                Kategori: {reportCategoryFilter === 'All' ? 'Semua Kategori (Rekapitulasi Lengkap)' : reportCategoryFilter} 
+                {' • '} 
+                Periode: {reportBulanFilter === 'All' ? 'Semua Bulan' : NAMA_BULAN[parseInt(reportBulanFilter, 10) - 1]} 
+                {reportTahunFilter === 'All' ? '' : ` Tahun ${reportTahunFilter}`}
+              </p>
+              <p className="text-[10px] text-slate-500">
+                Dokumen resmi diterbitkan pada: {formatTanggalIndonesia(today.toISOString().slice(0, 10))}
+              </p>
+            </div>
+
+            {/* Financial Summary KPI Box */}
+            <div className="my-4 p-3.5 bg-slate-50 border border-slate-300 rounded-lg flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 text-xs">
+              <div>
+                <span className="text-slate-600 block text-[11px]">Total Realisasi Pengeluaran:</span>
+                <span className="text-base font-bold font-mono text-slate-900">
+                  {formatRupiah(reportTotal)}
+                </span>
+                <span className="text-[11px] text-slate-600 italic block mt-0.5">
+                  Terbilang: <strong>{terbilang(reportTotal)} rupiah</strong>
+                </span>
+              </div>
+              <div className="text-left sm:text-right">
+                <span className="text-slate-600 block text-[11px]">Jumlah Transaksi:</span>
+                <span className="text-xs font-bold font-mono text-slate-900">
+                  {reportRecords.length} Transaksi ({reportStatusFilter === 'Aktif' ? 'Aktif' : 'Semua Termasuk Batal'})
+                </span>
+              </div>
+            </div>
+
+            {/* Table of Expenditures */}
+            <div className="overflow-x-auto my-4">
+              <table className="w-full text-left text-xs border border-slate-400">
+                <thead className="bg-slate-100 text-slate-900 font-bold border-b border-slate-400">
+                  <tr>
+                    <th className="p-2 border border-slate-300 text-center w-8">No</th>
+                    <th className="p-2 border border-slate-300 whitespace-nowrap">Tanggal</th>
+                    <th className="p-2 border border-slate-300 whitespace-nowrap">No. Bukti</th>
+                    <th className="p-2 border border-slate-300">Kategori</th>
+                    <th className="p-2 border border-slate-300">Penerima Dana</th>
+                    <th className="p-2 border border-slate-300">Periode / Keperluan</th>
+                    <th className="p-2 border border-slate-300">Keterangan Penggunaan Dana</th>
+                    <th className="p-2 border border-slate-300 text-right whitespace-nowrap">Nominal (Rp)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {reportRecords.length === 0 ? (
                     <tr>
-                      <th className="p-2 border border-slate-300 text-center w-8">No</th>
-                      <th className="p-2 border border-slate-300">Tanggal</th>
-                      <th className="p-2 border border-slate-300">No. Bukti</th>
-                      <th className="p-2 border border-slate-300">Kategori</th>
-                      <th className="p-2 border border-slate-300">Penerima</th>
-                      <th className="p-2 border border-slate-300">Uraian / Keterangan</th>
-                      <th className="p-2 border border-slate-300 text-right">Nominal (Rp)</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {laporanUmumRecords.length === 0 ? (
-                      <tr>
-                        <td colSpan={7} className="p-4 text-center text-slate-500">Tidak ada catatan transaksi aktif.</td>
-                      </tr>
-                    ) : (
-                      laporanUmumRecords.map((r, i) => (
-                        <tr key={r.id} className="border-b border-slate-200">
-                          <td className="p-2 border border-slate-300 text-center">{i + 1}</td>
-                          <td className="p-2 border border-slate-300 whitespace-nowrap">{formatTanggalIndonesia(r.tanggal)}</td>
-                          <td className="p-2 border border-slate-300 font-mono text-[11px]">{r.noBukti}</td>
-                          <td className="p-2 border border-slate-300 font-semibold">{r.kategori}</td>
-                          <td className="p-2 border border-slate-300">{r.penerima}</td>
-                          <td className="p-2 border border-slate-300">{r.keteranganPenggunaanDana || r.keterangan || '-'}</td>
-                          <td className="p-2 border border-slate-300 text-right font-mono font-bold">{formatRupiah(r.nominal)}</td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                  <tfoot>
-                    <tr className="bg-slate-100 font-bold border-t-2 border-slate-400">
-                      <td colSpan={6} className="p-2 border border-slate-300 text-right uppercase">Total Pengeluaran:</td>
-                      <td className="p-2 border border-slate-300 text-right font-mono text-sm text-red-700">
-                        {formatRupiah(laporanUmumRecords.reduce((acc, curr) => acc + (curr.nominal || 0), 0))}
+                      <td colSpan={8} className="p-6 text-center text-slate-500 italic">
+                        Tidak ada data transaksi pengeluaran dana untuk filter kategori dan periode yang dipilih.
                       </td>
                     </tr>
-                  </tfoot>
-                </table>
-              </div>
-            )}
-
-            {/* Sub-report 2: Petugas Sampah */}
-            {laporanSubTab === 'sampah' && (
-              <div className="overflow-x-auto my-4">
-                <table className="w-full text-left text-xs border border-slate-300">
-                  <thead className="bg-slate-100 text-slate-800 font-bold border-b border-slate-300">
-                    <tr>
-                      <th className="p-2 border border-slate-300 text-center w-8">No</th>
-                      <th className="p-2 border border-slate-300">Tanggal</th>
-                      <th className="p-2 border border-slate-300">No. Bukti</th>
-                      <th className="p-2 border border-slate-300">Periode Bulan</th>
-                      <th className="p-2 border border-slate-300">Nama Petugas Sampah</th>
-                      <th className="p-2 border border-slate-300">Keterangan</th>
-                      <th className="p-2 border border-slate-300 text-right">Nominal (Rp)</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {laporanSampahRecords.length === 0 ? (
-                      <tr>
-                        <td colSpan={7} className="p-4 text-center text-slate-500">Belum ada pembayaran honor petugas sampah.</td>
+                  ) : (
+                    reportRecords.map((r, i) => (
+                      <tr 
+                        key={r.id} 
+                        className={`border-b border-slate-300 ${
+                          r.status === 'Dibatalkan' ? 'bg-red-50/50 text-slate-400 line-through' : ''
+                        }`}
+                      >
+                        <td className="p-2 border border-slate-300 text-center">{i + 1}</td>
+                        <td className="p-2 border border-slate-300 whitespace-nowrap">{formatTanggalIndonesia(r.tanggal)}</td>
+                        <td className="p-2 border border-slate-300 font-mono text-[11px] whitespace-nowrap">{r.noBukti}</td>
+                        <td className="p-2 border border-slate-300 font-semibold">{r.kategori}</td>
+                        <td className="p-2 border border-slate-300 font-medium">{r.penerima}</td>
+                        <td className="p-2 border border-slate-300 text-[11px]">{r.periode || '-'}</td>
+                        <td className="p-2 border border-slate-300">
+                          <span>{r.keteranganPenggunaanDana || r.keterangan || '-'}</span>
+                          {r.status === 'Dibatalkan' && (
+                            <span className="block text-[10px] text-red-600 no-underline italic">
+                              (Dibatalkan: {r.cancelReason})
+                            </span>
+                          )}
+                        </td>
+                        <td className="p-2 border border-slate-300 text-right font-mono font-bold whitespace-nowrap">
+                          {formatRupiah(r.nominal)}
+                        </td>
                       </tr>
-                    ) : (
-                      laporanSampahRecords.map((r, i) => (
-                        <tr key={r.id} className="border-b border-slate-200">
-                          <td className="p-2 border border-slate-300 text-center">{i + 1}</td>
-                          <td className="p-2 border border-slate-300 whitespace-nowrap">{formatTanggalIndonesia(r.tanggal)}</td>
-                          <td className="p-2 border border-slate-300 font-mono text-[11px]">{r.noBukti}</td>
-                          <td className="p-2 border border-slate-300 font-semibold">{r.periode || '-'}</td>
-                          <td className="p-2 border border-slate-300 font-bold">{r.penerima}</td>
-                          <td className="p-2 border border-slate-300">{r.keteranganPenggunaanDana || r.keterangan || '-'}</td>
-                          <td className="p-2 border border-slate-300 text-right font-mono font-bold">{formatRupiah(r.nominal)}</td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                  <tfoot>
-                    <tr className="bg-slate-100 font-bold border-t-2 border-slate-400">
-                      <td colSpan={6} className="p-2 border border-slate-300 text-right uppercase">Total Pembayaran Sampah:</td>
-                      <td className="p-2 border border-slate-300 text-right font-mono text-sm text-emerald-800">
-                        {formatRupiah(laporanSampahRecords.reduce((acc, curr) => acc + (curr.nominal || 0), 0))}
-                      </td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-            )}
+                    ))
+                  )}
+                </tbody>
+                <tfoot>
+                  <tr className="bg-slate-100 font-bold border-t-2 border-slate-400">
+                    <td colSpan={7} className="p-2.5 border border-slate-300 text-right uppercase tracking-wider">
+                      TOTAL REALISASI PENGELUARAN:
+                    </td>
+                    <td className="p-2.5 border border-slate-300 text-right font-mono text-sm text-red-700 whitespace-nowrap">
+                      {formatRupiah(reportTotal)}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
 
-            {/* Sub-report 3: Uang Meja */}
-            {laporanSubTab === 'uang_meja' && (
-              <div className="overflow-x-auto my-4">
-                <table className="w-full text-left text-xs border border-slate-300">
-                  <thead className="bg-slate-100 text-slate-800 font-bold border-b border-slate-300">
-                    <tr>
-                      <th className="p-2 border border-slate-300 text-center w-8">No</th>
-                      <th className="p-2 border border-slate-300">Tanggal</th>
-                      <th className="p-2 border border-slate-300">No. Bukti</th>
-                      <th className="p-2 border border-slate-300">Periode Pertemuan</th>
-                      <th className="p-2 border border-slate-300">Penerima / Seksi Acara</th>
-                      <th className="p-2 border border-slate-300">Keterangan Penggunaan</th>
-                      <th className="p-2 border border-slate-300 text-right">Nominal (Rp)</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {laporanUangMejaRecords.length === 0 ? (
-                      <tr>
-                        <td colSpan={7} className="p-4 text-center text-slate-500">Belum ada penggunaan uang meja.</td>
-                      </tr>
-                    ) : (
-                      laporanUangMejaRecords.map((r, i) => (
-                        <tr key={r.id} className="border-b border-slate-200">
-                          <td className="p-2 border border-slate-300 text-center">{i + 1}</td>
-                          <td className="p-2 border border-slate-300 whitespace-nowrap">{formatTanggalIndonesia(r.tanggal)}</td>
-                          <td className="p-2 border border-slate-300 font-mono text-[11px]">{r.noBukti}</td>
-                          <td className="p-2 border border-slate-300 font-semibold">{r.periode || '-'}</td>
-                          <td className="p-2 border border-slate-300 font-bold">{r.penerima}</td>
-                          <td className="p-2 border border-slate-300">{r.keteranganPenggunaanDana || r.keterangan || '-'}</td>
-                          <td className="p-2 border border-slate-300 text-right font-mono font-bold">{formatRupiah(r.nominal)}</td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                  <tfoot>
-                    <tr className="bg-slate-100 font-bold border-t-2 border-slate-400">
-                      <td colSpan={6} className="p-2 border border-slate-300 text-right uppercase">Total Penggunaan Uang Meja:</td>
-                      <td className="p-2 border border-slate-300 text-right font-mono text-sm text-amber-800">
-                        {formatRupiah(laporanUangMejaRecords.reduce((acc, curr) => acc + (curr.nominal || 0), 0))}
-                      </td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-            )}
-
-            {/* Sub-report 4: Lainnya */}
-            {laporanSubTab === 'lainnya' && (
-              <div className="overflow-x-auto my-4">
-                <table className="w-full text-left text-xs border border-slate-300">
-                  <thead className="bg-slate-100 text-slate-800 font-bold border-b border-slate-300">
-                    <tr>
-                      <th className="p-2 border border-slate-300 text-center w-8">No</th>
-                      <th className="p-2 border border-slate-300">Tanggal</th>
-                      <th className="p-2 border border-slate-300">No. Bukti</th>
-                      <th className="p-2 border border-slate-300">Penerima Dana</th>
-                      <th className="p-2 border border-slate-300">Keterangan Penggunaan Dana (Wajib)</th>
-                      <th className="p-2 border border-slate-300 text-right">Nominal (Rp)</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {laporanLainnyaRecords.length === 0 ? (
-                      <tr>
-                        <td colSpan={6} className="p-4 text-center text-slate-500">Belum ada pengeluaran kategori Lainnya.</td>
-                      </tr>
-                    ) : (
-                      laporanLainnyaRecords.map((r, i) => (
-                        <tr key={r.id} className="border-b border-slate-200">
-                          <td className="p-2 border border-slate-300 text-center">{i + 1}</td>
-                          <td className="p-2 border border-slate-300 whitespace-nowrap">{formatTanggalIndonesia(r.tanggal)}</td>
-                          <td className="p-2 border border-slate-300 font-mono text-[11px]">{r.noBukti}</td>
-                          <td className="p-2 border border-slate-300 font-bold">{r.penerima}</td>
-                          <td className="p-2 border border-slate-300">{r.keteranganPenggunaanDana || r.keterangan || '-'}</td>
-                          <td className="p-2 border border-slate-300 text-right font-mono font-bold">{formatRupiah(r.nominal)}</td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                  <tfoot>
-                    <tr className="bg-slate-100 font-bold border-t-2 border-slate-400">
-                      <td colSpan={5} className="p-2 border border-slate-300 text-right uppercase">Total Kategori Lainnya:</td>
-                      <td className="p-2 border border-slate-300 text-right font-mono text-sm text-purple-800">
-                        {formatRupiah(laporanLainnyaRecords.reduce((acc, curr) => acc + (curr.nominal || 0), 0))}
-                      </td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-            )}
-
-            {/* Official Signatures Block */}
-            <div className="mt-12 pt-6 flex justify-between items-center text-xs text-slate-900">
-              <div className="text-center w-56">
+            {/* Required Signatures Block */}
+            <div className="signature-section print-avoid-break mt-12 pt-6 flex justify-between items-start text-xs text-slate-900">
+              <div className="text-center w-60">
                 <p>Mengetahui,</p>
                 <p className="font-bold">Ketua RT 09 RW 08</p>
-                <div className="h-20" />
-                <p className="font-bold underline uppercase">{data.settings.ketuaRT || 'H. Sugiyanto, S.E.'}</p>
+                <div className="h-24 flex items-center justify-center text-slate-300 italic text-[10px] print:text-transparent">
+                  ( Tanda Tangan & Cap Resmi RT 09 )
+                </div>
+                <p className="font-bold underline uppercase tracking-wide">{signerKetua}</p>
                 <p className="text-[11px] text-slate-600">Ketua RT 09</p>
               </div>
 
-              <div className="text-center w-56">
+              <div className="text-center w-60">
                 <p>Semarang, {formatTanggalIndonesia(today.toISOString().slice(0, 10))}</p>
                 <p className="font-bold">Bendahara RT 09 RW 08</p>
-                <div className="h-20" />
-                <p className="font-bold underline uppercase">{data.settings.bendahara || 'Bambang Pamungkas, S.Kom.'}</p>
-                <p className="text-[11px] text-slate-600">Bendahara</p>
+                <div className="h-24 flex items-center justify-center text-slate-300 italic text-[10px] print:text-transparent">
+                  ( Tanda Tangan )
+                </div>
+                <p className="font-bold underline uppercase tracking-wide">{signerBendahara}</p>
+                <p className="text-[11px] text-slate-600">Bendahara RT 09</p>
               </div>
             </div>
 
@@ -1632,7 +1702,20 @@ export const PengeluaranDanaView: React.FC<PengeluaranDanaViewProps> = ({ onNavi
                 )}
               </div>
 
-              <div className="flex items-center justify-end pt-3 border-t border-[#E5E7EB]">
+              <div className="flex items-center justify-between pt-3 border-t border-[#E5E7EB]">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const item = detailRecord;
+                    setDetailRecord(null);
+                    handlePrintReceipt(item);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-[#1E5AA8] bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  <span>Cetak Bukti Kas Keluar</span>
+                </button>
+
                 <button
                   type="button"
                   onClick={() => setDetailRecord(null)}
@@ -1640,6 +1723,145 @@ export const PengeluaranDanaView: React.FC<PengeluaranDanaViewProps> = ({ onNavi
                 >
                   Tutup
                 </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 7. MODAL: CETAK BUKTI KAS KELUAR / KUITANSI SATUAN (VOUCHER) */}
+      {receiptRecord && (
+        <div 
+          id="modal-receipt-voucher"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto print:p-0 print:bg-white print:static print:z-auto"
+        >
+          <div className="bg-white rounded-xl shadow-2xl border border-[#E5E7EB] w-full max-w-2xl overflow-hidden my-6 print:m-0 print:border-none print:shadow-none print:w-full">
+            {/* Modal Actions Bar (Hidden during print) */}
+            <div className="flex items-center justify-between p-4 bg-slate-50 border-b border-[#E5E7EB] no-print">
+              <div className="flex items-center gap-2">
+                <Printer className="w-4 h-4 text-[#1E5AA8]" />
+                <span className="text-xs font-bold text-slate-800">Pratinjau Bukti Kas Keluar (Voucher Kuitansi RT)</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-white bg-[#1E5AA8] hover:bg-[#164785] rounded-lg shadow-xs"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  <span>Cetak Dokumen Ini</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setReceiptRecord(null)}
+                  className="px-3 py-1.5 text-xs font-semibold text-[#4B5563] bg-white border border-[#D1D5DB] rounded-lg hover:bg-slate-100"
+                >
+                  Tutup
+                </button>
+              </div>
+            </div>
+
+            {/* Printable Voucher Paper */}
+            <div className="printable-document p-8 sm:p-10 text-slate-900 print:p-0">
+              {/* Civic Kop Surat */}
+              <div className="text-center pb-3 mb-4 border-b-2 border-slate-900 space-y-0.5">
+                <h2 className="text-xs font-bold uppercase tracking-widest text-slate-800">
+                  RUKUN TETANGGA 09 RUKUN WARGA 08
+                </h2>
+                <h1 className="text-sm font-black uppercase tracking-wide text-slate-900">
+                  KELURAHAN BANGETAYU WETAN • KECAMATAN GENUK SEMARANG
+                </h1>
+                <p className="text-[10px] text-slate-600">
+                  Sekretariat: Balai Warga RT 09 RW 08 Bangetayu Wetan, Genuk, Kota Semarang 50115
+                </p>
+              </div>
+
+              {/* Title & Metadata */}
+              <div className="flex items-center justify-between border-b border-slate-300 pb-2 mb-4 text-xs">
+                <div>
+                  <h3 className="font-bold text-sm underline uppercase tracking-wide">
+                    BUKTI PENGELUARAN KAS KELUAR
+                  </h3>
+                  <span className="text-[10px] text-slate-500">Formulir Pertanggungjawaban Kas RT</span>
+                </div>
+                <div className="text-right">
+                  <p className="font-mono font-bold text-xs">No: {receiptRecord.noBukti}</p>
+                  <p className="text-[11px] text-slate-600">Tanggal: {formatTanggalIndonesia(receiptRecord.tanggal)}</p>
+                </div>
+              </div>
+
+              {/* Voucher Content Table */}
+              <div className="space-y-3 text-xs leading-relaxed border border-slate-300 rounded-lg p-4 bg-slate-50/50 print:bg-transparent">
+                <div className="grid grid-cols-4 gap-2">
+                  <span className="font-semibold text-slate-700">Sudah Terima Dari:</span>
+                  <span className="col-span-3 font-bold text-slate-900">Bendahara RT 09 RW 08 Bangetayu Wetan</span>
+                </div>
+
+                <div className="grid grid-cols-4 gap-2">
+                  <span className="font-semibold text-slate-700">Dibayarkan Kepada:</span>
+                  <span className="col-span-3 font-bold text-slate-900">{receiptRecord.penerima}</span>
+                </div>
+
+                <div className="grid grid-cols-4 gap-2">
+                  <span className="font-semibold text-slate-700">Kategori Biaya:</span>
+                  <span className="col-span-3 font-bold text-slate-900">{receiptRecord.kategori}</span>
+                </div>
+
+                {receiptRecord.periode && (
+                  <div className="grid grid-cols-4 gap-2">
+                    <span className="font-semibold text-slate-700">Periode Kegiatan:</span>
+                    <span className="col-span-3 font-medium text-slate-800">{receiptRecord.periode}</span>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-4 gap-2">
+                  <span className="font-semibold text-slate-700">Uraian / Keperluan:</span>
+                  <span className="col-span-3 text-slate-900 font-medium">
+                    {receiptRecord.keteranganPenggunaanDana || receiptRecord.keterangan || '-'}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-4 gap-2 pt-2 border-t border-slate-200">
+                  <span className="font-semibold text-slate-700">Uang Sejumlah:</span>
+                  <div className="col-span-3">
+                    <span className="text-base font-bold font-mono text-slate-900 block">
+                      {formatRupiah(receiptRecord.nominal)}
+                    </span>
+                    <span className="text-[11px] italic text-slate-700 block mt-0.5">
+                      ( Terbilang: <strong>{terbilang(receiptRecord.nominal)} rupiah</strong> )
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* 3 Signatures: Penerima, Ketua RT 09, Bendahara RT 09 */}
+              <div className="signature-section print-avoid-break mt-10 grid grid-cols-3 gap-4 text-center text-xs">
+                <div>
+                  <p className="text-slate-600">Penerima Uang,</p>
+                  <div className="h-20 flex items-center justify-center text-[10px] text-slate-300 print:text-transparent italic">
+                    ( Tanda Tangan )
+                  </div>
+                  <p className="font-bold underline uppercase tracking-wide">{receiptRecord.penerima}</p>
+                  <p className="text-[10px] text-slate-500">Penerima Dana</p>
+                </div>
+
+                <div>
+                  <p className="text-slate-600">Menyetujui,</p>
+                  <div className="h-20 flex items-center justify-center text-[10px] text-slate-300 print:text-transparent italic">
+                    ( Cap & Tanda Tangan )
+                  </div>
+                  <p className="font-bold underline uppercase tracking-wide">{signerKetua}</p>
+                  <p className="text-[10px] text-slate-500">Ketua RT 09 RW 08</p>
+                </div>
+
+                <div>
+                  <p className="text-slate-600">Semarang, {formatTanggalIndonesia(receiptRecord.tanggal)}</p>
+                  <div className="h-20 flex items-center justify-center text-[10px] text-slate-300 print:text-transparent italic">
+                    ( Tanda Tangan )
+                  </div>
+                  <p className="font-bold underline uppercase tracking-wide">{signerBendahara}</p>
+                  <p className="text-[10px] text-slate-500">Bendahara RT 09 RW 08</p>
+                </div>
               </div>
             </div>
           </div>

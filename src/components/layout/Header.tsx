@@ -46,9 +46,12 @@ export const Header: React.FC<HeaderProps> = ({ onToggleMobileMenu, currentTabNa
   const totalPengeluaranBop = data.bop
     .filter(b => b.jenis === 'Pengeluaran')
     .reduce((acc, curr) => acc + (curr.nominal || 0), 0);
+  const totalPengeluaranDana = (data.pengeluaranDana || [])
+    .filter(p => p.status === 'Aktif')
+    .reduce((acc, curr) => acc + (curr.nominal || 0), 0);
 
   const totalPemasukan = totalIuran + totalJimpitan + totalDonasi + totalPemasukanBop;
-  const saldoKas = totalPemasukan - totalPengeluaranBop;
+  const saldoKas = totalPemasukan - (totalPengeluaranBop + totalPengeluaranDana);
 
   const today = new Date();
   const dateFormatted = `${today.getDate()} ${NAMA_BULAN[today.getMonth()]} ${today.getFullYear()}`;
