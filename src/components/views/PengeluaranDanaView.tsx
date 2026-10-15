@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useData } from '../../context/DataContext';
-import { PengeluaranDana, PengeluaranDanaKategori, UserRole, NavigationTab } from '../../types';
+import { PengeluaranDana, PengeluaranDanaKategori, SumberDanaPengeluaran, UserRole, NavigationTab } from '../../types';
 import { 
   Receipt, 
   Plus, 
@@ -31,7 +31,10 @@ import {
   FileDown,
   FileSpreadsheet,
   PenTool,
-  Check
+  Check,
+  Coins,
+  CircleDollarSign,
+  Gift
 } from 'lucide-react';
 import { ConfirmModal } from '../common/ConfirmModal';
 import { formatRupiah, formatTanggalIndonesia, downloadCSV, terbilang, NAMA_BULAN } from '../../utils/format';
@@ -78,6 +81,7 @@ export const PengeluaranDanaView: React.FC<PengeluaranDanaViewProps> = ({ onNavi
   // Filters
   const [searchTerm, setSearchTerm] = useState('');
   const [kategoriFilter, setKategoriFilter] = useState<string>('All');
+  const [sumberDanaFilter, setSumberDanaFilter] = useState<string>('All');
   const [statusFilter, setStatusFilter] = useState<'All' | 'Aktif' | 'Dibatalkan'>('Aktif');
   const [selectedBulan, setSelectedBulan] = useState<string>('All');
   const [selectedTahun, setSelectedTahun] = useState<string>(String(currentYear));
@@ -89,6 +93,7 @@ export const PengeluaranDanaView: React.FC<PengeluaranDanaViewProps> = ({ onNavi
   // Form Fields
   const [formTanggal, setFormTanggal] = useState(today.toISOString().slice(0, 10));
   const [formKategori, setFormKategori] = useState<PengeluaranDanaKategori>('Petugas Sampah');
+  const [formSumberDana, setFormSumberDana] = useState<SumberDanaPengeluaran>('iuran');
   const [formNominal, setFormNominal] = useState('');
   const [formPenerima, setFormPenerima] = useState('');
   const [formPeriode, setFormPeriode] = useState('');
@@ -139,6 +144,10 @@ export const PengeluaranDanaView: React.FC<PengeluaranDanaViewProps> = ({ onNavi
     return (data.pengeluaranDana || []).filter(item => {
       if (statusFilter !== 'All' && item.status !== statusFilter) return false;
       if (kategoriFilter !== 'All' && item.kategori !== kategoriFilter) return false;
+      if (sumberDanaFilter !== 'All') {
+        const itemSumber = item.sumberDana || 'iuran';
+        if (itemSumber !== sumberDanaFilter) return false;
+      }
 
       if (item.tanggal) {
         const [y, m] = item.tanggal.split('-');
@@ -154,15 +163,16 @@ export const PengeluaranDanaView: React.FC<PengeluaranDanaViewProps> = ({ onNavi
         const matchKet = (item.keterangan || '').toLowerCase().includes(q);
         const matchUraian = (item.keteranganPenggunaanDana || '').toLowerCase().includes(q);
         const matchPetugas = (item.createdBy || '').toLowerCase().includes(q);
+        const matchSumber = (item.sumberDana || 'iuran').toLowerCase().includes(q);
 
-        if (!matchBukti && !matchKat && !matchPenerima && !matchKet && !matchUraian && !matchPetugas) {
+        if (!matchBukti && !matchKat && !matchPenerima && !matchKet && !matchUraian && !matchPetugas && !matchSumber) {
           return false;
         }
       }
 
       return true;
     }).sort((a, b) => new Date(b.tanggal).getTime() - new Date(a.tanggal).getTime());
-  }, [data.pengeluaranDana, statusFilter, kategoriFilter, selectedTahun, selectedBulan, searchTerm]);
+  }, [data.pengeluaranDana, statusFilter, kategoriFilter, sumberDanaFilter, selectedTahun, selectedBulan, searchTerm]);
 
   // High-level statistics
   const stats = useMemo(() => {
@@ -207,6 +217,20 @@ export const PengeluaranDanaView: React.FC<PengeluaranDanaViewProps> = ({ onNavi
 
     const bulanIniLainnya = filteredActive
       .filter(p => p.kategori === 'Lainnya')
+      .reduce((acc, curr) => acc + (curr.nominal || 0), 0);
+
+    // Sumber Dana Breakdown
+    const totalSumberIuran = allActive
+      .filter(p => (p.sumberDana || 'iuran') === 'iuran')
+      .reduce((acc, curr) => acc + (curr.nominal || 0), 0);
+    const totalSumberJimpitan = allActive
+      .filter(p => p.sumberDana === 'jimpitan')
+      .reduce((acc, curr) => acc + (curr.nominal || 0), 0);
+    const totalSumberDonasi = allActive
+      .filter(p => p.sumberDana === 'donasi')
+      .reduce((acc, curr) => acc + (curr.nominal || 0), 0);
+    const totalSumberUmum = allActive
+      .filter(p => p.sumberDana === 'umum')
       .reduce((acc, curr) => acc + (curr.nominal || 0), 0);
 
     // Breakdown per Kategori (Tahun ini atau Periode terpilih)
@@ -263,6 +287,10 @@ export const PengeluaranDanaView: React.FC<PengeluaranDanaViewProps> = ({ onNavi
       bulanIniUangMeja,
       totalLainnya,
       bulanIniLainnya,
+      totalSumberIuran,
+      totalSumberJimpitan,
+      totalSumberDonasi,
+      totalSumberUmum,
       categoryBreakdown,
       monthlyBreakdown,
       sumYear,
@@ -276,6 +304,7 @@ export const PengeluaranDanaView: React.FC<PengeluaranDanaViewProps> = ({ onNavi
     setEditingRecord(null);
     setFormTanggal(today.toISOString().slice(0, 10));
     setFormKategori('Petugas Sampah');
+    setFormSumberDana('iuran');
     setFormNominal('');
     setFormPenerima('');
     setFormPeriode(`${['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'][today.getMonth()]} ${today.getFullYear()}`);
@@ -290,6 +319,7 @@ export const PengeluaranDanaView: React.FC<PengeluaranDanaViewProps> = ({ onNavi
     setEditingRecord(rec);
     setFormTanggal(rec.tanggal);
     setFormKategori(rec.kategori as PengeluaranDanaKategori);
+    setFormSumberDana((rec.sumberDana as SumberDanaPengeluaran) || 'iuran');
     setFormNominal(String(rec.nominal));
     setFormPenerima(rec.penerima);
     setFormPeriode(rec.periode || '');
@@ -332,6 +362,7 @@ export const PengeluaranDanaView: React.FC<PengeluaranDanaViewProps> = ({ onNavi
       const res = updatePengeluaranDana(editingRecord.id, {
         tanggal: formTanggal,
         kategori: formKategori,
+        sumberDana: formSumberDana,
         nominal: parsedNominal,
         penerima: formPenerima.trim(),
         periode: formPeriode.trim() || undefined,
@@ -348,6 +379,7 @@ export const PengeluaranDanaView: React.FC<PengeluaranDanaViewProps> = ({ onNavi
       const res = addPengeluaranDana({
         tanggal: formTanggal,
         kategori: formKategori,
+        sumberDana: formSumberDana,
         nominal: parsedNominal,
         penerima: formPenerima.trim(),
         periode: formPeriode.trim() || undefined,
@@ -413,6 +445,7 @@ export const PengeluaranDanaView: React.FC<PengeluaranDanaViewProps> = ({ onNavi
       'No',
       'Nomor Bukti',
       'Tanggal',
+      'Sumber Pengurangan Dana',
       'Kategori',
       'Penerima',
       'Periode',
@@ -427,6 +460,7 @@ export const PengeluaranDanaView: React.FC<PengeluaranDanaViewProps> = ({ onNavi
       index + 1,
       r.noBukti,
       r.tanggal,
+      r.sumberDana === 'jimpitan' ? 'Jimpitan RT' : r.sumberDana === 'donasi' ? 'Donasi' : r.sumberDana === 'umum' ? 'Kas Umum' : 'Iuran Warga',
       r.kategori,
       r.penerima,
       r.periode || '-',
@@ -729,37 +763,64 @@ export const PengeluaranDanaView: React.FC<PengeluaranDanaViewProps> = ({ onNavi
               </div>
             </div>
 
-            {/* Sub-bar: Status and Reset */}
-            <div className="flex items-center justify-between mt-3 pt-3 border-t border-[#F3F4F6] text-xs">
-              <div className="flex items-center gap-2">
-                <span className="text-[#6B7280] font-medium">Status:</span>
-                {(['All', 'Aktif', 'Dibatalkan'] as const).map(st => (
-                  <button
-                    key={st}
-                    type="button"
-                    onClick={() => setStatusFilter(st)}
-                    className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium transition-colors ${
-                      statusFilter === st
-                        ? 'bg-[#1E5AA8] text-white'
-                        : 'bg-slate-100 text-[#4B5563] hover:bg-slate-200'
-                    }`}
-                  >
-                    {st === 'All' ? 'Semua' : st}
-                  </button>
-                ))}
+            {/* Sub-bar: Status, Sumber Dana, and Reset */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between mt-3 pt-3 border-t border-[#F3F4F6] text-xs gap-2">
+              <div className="flex flex-wrap items-center gap-4">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[#6B7280] font-medium">Status:</span>
+                  {(['All', 'Aktif', 'Dibatalkan'] as const).map(st => (
+                    <button
+                      key={st}
+                      type="button"
+                      onClick={() => setStatusFilter(st)}
+                      className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium transition-colors ${
+                        statusFilter === st
+                          ? 'bg-[#1E5AA8] text-white font-bold'
+                          : 'bg-slate-100 text-[#4B5563] hover:bg-slate-200'
+                      }`}
+                    >
+                      {st === 'All' ? 'Semua' : st}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[#6B7280] font-medium">Sumber:</span>
+                  {[
+                    { id: 'All', label: 'Semua' },
+                    { id: 'iuran', label: '💳 Iuran' },
+                    { id: 'jimpitan', label: '🪙 Jimpitan' },
+                    { id: 'donasi', label: '🎁 Donasi' },
+                    { id: 'umum', label: '🏛️ Umum' }
+                  ].map(s => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => setSumberDanaFilter(s.id)}
+                      className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium transition-colors ${
+                        sumberDanaFilter === s.id
+                          ? 'bg-blue-600 text-white font-bold'
+                          : 'bg-slate-100 text-[#4B5563] hover:bg-slate-200'
+                      }`}
+                    >
+                      {s.label}
+                    </button>
+                  ))}
+                </div>
               </div>
 
-              {(searchTerm || kategoriFilter !== 'All' || statusFilter !== 'Aktif' || selectedBulan !== 'All') && (
+              {(searchTerm || kategoriFilter !== 'All' || sumberDanaFilter !== 'All' || statusFilter !== 'Aktif' || selectedBulan !== 'All') && (
                 <button
                   type="button"
                   onClick={() => {
                     setSearchTerm('');
                     setKategoriFilter('All');
+                    setSumberDanaFilter('All');
                     setStatusFilter('Aktif');
                     setSelectedBulan('All');
                     setSelectedTahun(String(currentYear));
                   }}
-                  className="text-xs text-[#1E5AA8] hover:underline"
+                  className="text-xs text-[#1E5AA8] hover:underline self-end sm:self-auto"
                 >
                   Reset Filter
                 </button>
@@ -776,6 +837,7 @@ export const PengeluaranDanaView: React.FC<PengeluaranDanaViewProps> = ({ onNavi
                     <th className="py-3 px-3 text-center w-10">No</th>
                     <th className="py-3 px-3">Tanggal</th>
                     <th className="py-3 px-3">Nomor Bukti</th>
+                    <th className="py-3 px-3">Sumber Dana</th>
                     <th className="py-3 px-3">Kategori</th>
                     <th className="py-3 px-3">Penerima</th>
                     <th className="py-3 px-3">Keterangan / Penggunaan</th>
@@ -787,7 +849,7 @@ export const PengeluaranDanaView: React.FC<PengeluaranDanaViewProps> = ({ onNavi
                 <tbody className="divide-y divide-[#E5E7EB]">
                   {filteredList.length === 0 ? (
                     <tr>
-                      <td colSpan={9} className="py-12 text-center text-[#6B7280]">
+                      <td colSpan={10} className="py-12 text-center text-[#6B7280]">
                         <Receipt className="w-10 h-10 text-slate-300 mx-auto mb-2" />
                         <p className="font-medium text-slate-600">Belum ada data pengeluaran dana</p>
                         <p className="text-xs text-slate-400 mt-0.5">Silakan tambahkan data melalui tombol "+ TAMBAH PENGELUARAN"</p>
@@ -815,6 +877,29 @@ export const PengeluaranDanaView: React.FC<PengeluaranDanaViewProps> = ({ onNavi
                             >
                               {item.noBukti}
                             </button>
+                          </td>
+                          <td className="py-3 px-3 whitespace-nowrap">
+                            {item.sumberDana === 'jimpitan' ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-cyan-50 text-cyan-700 border border-cyan-200">
+                                <CircleDollarSign className="w-3 h-3 text-cyan-600" />
+                                Jimpitan
+                              </span>
+                            ) : item.sumberDana === 'donasi' ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                                <Gift className="w-3 h-3 text-amber-600" />
+                                Donasi
+                              </span>
+                            ) : item.sumberDana === 'umum' ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-300">
+                                <Building2 className="w-3 h-3 text-slate-600" />
+                                Kas Umum
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                <Coins className="w-3 h-3 text-emerald-600" />
+                                Iuran Warga
+                              </span>
+                            )}
                           </td>
                           <td className="py-3 px-3 whitespace-nowrap">
                             <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold ${
@@ -1378,6 +1463,85 @@ export const PengeluaranDanaView: React.FC<PengeluaranDanaViewProps> = ({ onNavi
                   <span>{formError}</span>
                 </div>
               )}
+
+              {/* Sumber Pengurangan Dana (Iuran, Jimpitan, Donasi, Umum) */}
+              <div className="p-3 bg-slate-50 rounded-xl border border-[#E5E7EB] space-y-2">
+                <label className="block text-xs font-bold text-[#1F2937]">
+                  Sumber Pengurangan Dana <span className="text-red-500">*</span>
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setFormSumberDana('iuran')}
+                    className={`p-2 rounded-lg border text-left flex flex-col gap-0.5 transition-all ${
+                      formSumberDana === 'iuran'
+                        ? 'bg-emerald-50 border-emerald-500 text-emerald-900 ring-2 ring-emerald-500/20'
+                        : 'bg-white border-[#D1D5DB] text-[#4B5563] hover:bg-slate-100'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5 font-bold text-xs">
+                      <Coins className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Iuran Warga</span>
+                    </div>
+                    <span className="text-[10px] text-[#6B7280]">Potong Kas Iuran</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setFormSumberDana('jimpitan')}
+                    className={`p-2 rounded-lg border text-left flex flex-col gap-0.5 transition-all ${
+                      formSumberDana === 'jimpitan'
+                        ? 'bg-cyan-50 border-cyan-500 text-cyan-900 ring-2 ring-cyan-500/20'
+                        : 'bg-white border-[#D1D5DB] text-[#4B5563] hover:bg-slate-100'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5 font-bold text-xs">
+                      <CircleDollarSign className="w-3.5 h-3.5 text-cyan-600" />
+                      <span>Jimpitan</span>
+                    </div>
+                    <span className="text-[10px] text-[#6B7280]">Potong Jimpitan</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setFormSumberDana('donasi')}
+                    className={`p-2 rounded-lg border text-left flex flex-col gap-0.5 transition-all ${
+                      formSumberDana === 'donasi'
+                        ? 'bg-amber-50 border-amber-500 text-amber-900 ring-2 ring-amber-500/20'
+                        : 'bg-white border-[#D1D5DB] text-[#4B5563] hover:bg-slate-100'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5 font-bold text-xs">
+                      <Gift className="w-3.5 h-3.5 text-amber-600" />
+                      <span>Donasi</span>
+                    </div>
+                    <span className="text-[10px] text-[#6B7280]">Potong Donasi</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setFormSumberDana('umum')}
+                    className={`p-2 rounded-lg border text-left flex flex-col gap-0.5 transition-all ${
+                      formSumberDana === 'umum'
+                        ? 'bg-slate-100 border-slate-600 text-slate-900 ring-2 ring-slate-600/20'
+                        : 'bg-white border-[#D1D5DB] text-[#4B5563] hover:bg-slate-100'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5 font-bold text-xs">
+                      <Building2 className="w-3.5 h-3.5 text-slate-600" />
+                      <span>Kas Umum</span>
+                    </div>
+                    <span className="text-[10px] text-[#6B7280]">Kas Operasional</span>
+                  </button>
+                </div>
+                <p className="text-[11px] text-[#6B7280] italic">
+                  * Pengeluaran ini otomatis memotong total penerimaan{' '}
+                  <strong className="text-[#1F2937]">
+                    {formSumberDana === 'iuran' ? 'Iuran Warga' : formSumberDana === 'jimpitan' ? 'Jimpitan RT' : formSumberDana === 'donasi' ? 'Donasi Warga' : 'Kas Umum RT'}
+                  </strong>{' '}
+                  dan tercatat di Buku Kas.
+                </p>
+              </div>
 
               {/* Tanggal & Kategori */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

@@ -79,6 +79,60 @@ export const PrintReportFooter: React.FC<PrintReportFooterProps> = ({
   );
 };
 
+interface PrintJimpitanFooterProps {
+  koordinatorNama?: string;
+  koordinatorJabatan?: string;
+  lokasi?: string;
+}
+
+export const PrintJimpitanFooter: React.FC<PrintJimpitanFooterProps> = ({
+  koordinatorNama = 'Budi Santoso',
+  koordinatorJabatan = 'Koordinator Jimpitan',
+  lokasi = 'Semarang',
+}) => {
+  const now = new Date();
+  const dateStr = formatTanggalIndonesia(now.toISOString().slice(0, 10), 'full');
+  const timeStr = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) + ' WIB';
+
+  const cleanNama = koordinatorNama ? String(koordinatorNama).trim() : '';
+  const isNamaInvalid = !cleanNama || cleanNama.toLowerCase() === 'undefined' || cleanNama.toLowerCase() === 'null';
+  const namaDisplay = isNamaInvalid ? 'Nama Koordinator Jimpitan belum diatur.' : cleanNama;
+
+  const cleanJabatan = koordinatorJabatan ? String(koordinatorJabatan).trim() : '';
+  const isJabatanInvalid = !cleanJabatan || cleanJabatan.toLowerCase() === 'undefined' || cleanJabatan.toLowerCase() === 'null';
+  const jabatanDisplay = isJabatanInvalid ? 'Koordinator Jimpitan' : cleanJabatan;
+
+  return (
+    <div 
+      className="hidden print:block mt-8 pt-4 text-black text-xs break-inside-avoid print-footer-container" 
+      style={{ pageBreakInside: 'avoid', breakInside: 'avoid' }}
+    >
+      {/* Timestamp */}
+      <div className="text-[10px] text-gray-600 mb-6 italic">
+        Dicetak pada: {dateStr}, {timeStr}
+      </div>
+
+      {/* Tanda Tangan Tunggal Koordinator Jimpitan */}
+      <div className="flex justify-end px-12">
+        <div className="text-center w-72">
+          <div className="text-gray-700">{lokasi}, {dateStr}</div>
+          <div className="font-semibold text-black mt-2">Mengetahui,</div>
+          <div className="font-bold text-black mt-1 uppercase tracking-wide">
+            {jabatanDisplay}
+          </div>
+          <div className="h-20"></div>
+          <div className={`font-bold underline text-sm ${isNamaInvalid ? 'text-red-600 italic no-underline' : 'text-black'}`}>
+            {namaDisplay}
+          </div>
+          <div className="text-gray-700 text-[11px] mt-0.5">
+            {jabatanDisplay}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 interface PrintPageStyleProps {
   landscape?: boolean;
 }
@@ -91,6 +145,10 @@ export const PrintPageStyle: React.FC<PrintPageStyleProps> = ({ landscape = fals
           @page {
             size: ${landscape ? 'A4 landscape' : 'A4 portrait'};
             margin: 8mm 8mm 12mm 8mm;
+          }
+          .print-footer-container {
+            break-inside: avoid !important;
+            page-break-inside: avoid !important;
           }
           .col-nomor-rumah,
           .col-nama-warga,

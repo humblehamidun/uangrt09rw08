@@ -25,12 +25,23 @@ export const PengaturanView: React.FC = () => {
     backupData, 
     restoreData, 
     resetToDefaultSample, 
-    clearAllData 
+    clearAllData,
+    currentUser,
+    logAudit,
+    addToast
   } = useData();
 
+  const isAdmin = currentUser?.role === 'Admin';
+
   // Local settings state
-  const [formSettings, setFormSettings] = useState<SettingsConfig>({ ...data.settings });
+  const [formSettings, setFormSettings] = useState<SettingsConfig>({
+    ...data.settings,
+    koordinatorJimpitanNama: data.settings.koordinatorJimpitanNama || 'Budi Santoso',
+    koordinatorJimpitanJabatan: data.settings.koordinatorJimpitanJabatan || 'Koordinator Jimpitan',
+    sekretaris: data.settings.sekretaris || 'Siti Aminah',
+  });
   const [isSavedNotice, setIsSavedNotice] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
   // Modals state
   const [confirmResetOpen, setConfirmResetOpen] = useState(false);
@@ -41,8 +52,48 @@ export const PengaturanView: React.FC = () => {
 
   const handleSettingsSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    updateSettings(formSettings);
+    setErrorMessage('');
+
+    // Validation for Koordinator Jimpitan
+    if (!formSettings.koordinatorJimpitanNama || !formSettings.koordinatorJimpitanNama.trim()) {
+      setErrorMessage('Nama Koordinator Jimpitan belum diatur.');
+      addToast('Nama Koordinator Jimpitan belum diatur.', 'error');
+      return;
+    }
+
+    if (!isAdmin) {
+      addToast('Hanya ADMIN yang memiliki hak akses untuk mengubah konfigurasi penandatangan.', 'error');
+      return;
+    }
+
+    // Check if Koordinator Jimpitan changed to log in Audit Log
+    const prevKoordinator = data.settings.koordinatorJimpitanNama || 'Budi Santoso';
+    const newKoordinator = formSettings.koordinatorJimpitanNama.trim();
+    if (prevKoordinator !== newKoordinator) {
+      logAudit(
+        'Ubah Koordinator Jimpitan',
+        `Sebelum: ${prevKoordinator}, Sesudah: ${newKoordinator}`
+      );
+    }
+
+    const updatedSignatories = {
+      ketuaRT: { nama: formSettings.ketuaRT },
+      bendahara: { nama: formSettings.bendahara },
+      koordinatorJimpitan: {
+        nama: newKoordinator,
+        jabatan: formSettings.koordinatorJimpitanJabatan?.trim() || 'Koordinator Jimpitan',
+      },
+      sekretaris: { nama: formSettings.sekretaris || '' }
+    };
+
+    updateSettings({
+      ...formSettings,
+      koordinatorJimpitanNama: newKoordinator,
+      koordinatorJimpitanJabatan: formSettings.koordinatorJimpitanJabatan?.trim() || 'Koordinator Jimpitan',
+      signatories: updatedSignatories,
+    });
     setIsSavedNotice(true);
+    addToast('Pengaturan sistem dan penandatangan laporan berhasil disimpan.', 'success');
     setTimeout(() => setIsSavedNotice(false), 3000);
   };
 
@@ -165,6 +216,155 @@ export const PengaturanView: React.FC = () => {
                 placeholder="Contoh: 0812-3456-7890"
                 className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white focus:outline-none focus:border-emerald-500"
               />
+            </div>
+          </div>
+        </div>
+
+        {/* Section: Penandatangan Laporan */}
+        <div id="section-penandatangan-laporan" className="p-6 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-4 shadow-md">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-800 gap-2">
+            <div className="flex items-center gap-2">
+              <ShieldAlert className="w-5 h-5 text-amber-400" />
+              <div>
+                <h3 className="text-sm font-bold text-white uppercase tracking-wider">
+                  PENANDATANGAN LAPORAN
+                </h3>
+                <p className="text-xs text-slate-400">
+                  Konfigurasi pejabat penandatangan dokumen cetak & laporan keuangan RT
+                </p>
+              </div>
+            </div>
+            {!isAdmin ? (
+              <span className="px-2.5 py-1 rounded-lg bg-amber-500/10 text-amber-300 border border-amber-500/20 text-[11px] font-medium">
+                Mode Lihat (Hanya Admin yang dapat mengubah)
+              </span>
+            ) : (
+              <span className="px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 text-[11px] font-medium">
+                Admin: Akses Pengaturan Penuh
+              </span>
+            )}
+          </div>
+
+          {errorMessage && (
+            <div className="flex items-center gap-2 p-3 rounded-xl bg-rose-500/20 border border-rose-500/30 text-rose-300 text-xs font-medium">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>{errorMessage}</span>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+            {/* Ketua RT */}
+            <div className="p-3.5 rounded-xl bg-slate-950/70 border border-slate-800 space-y-2">
+              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
+                1. KETUA RT (Laporan Iuran, Donasi, BOP, Buku Kas)
+              </span>
+              <div>
+                <label htmlFor="input-sign-ketua" className="block text-slate-400 font-medium mb-1">
+                  Nama Ketua RT
+                </label>
+                <input
+                  id="input-sign-ketua"
+                  type="text"
+                  disabled={!isAdmin}
+                  value={formSettings.ketuaRT}
+                  onChange={(e) => setFormSettings({ ...formSettings, ketuaRT: e.target.value })}
+                  placeholder="H. Sugiyanto, S.E."
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-white focus:outline-none focus:border-emerald-500 disabled:opacity-70 disabled:cursor-not-allowed"
+                  required
+                />
+              </div>
+            </div>
+
+            {/* Bendahara RT */}
+            <div className="p-3.5 rounded-xl bg-slate-950/70 border border-slate-800 space-y-2">
+              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
+                2. BENDAHARA (Laporan Iuran, Donasi, BOP, Buku Kas)
+              </span>
+              <div>
+                <label htmlFor="input-sign-bendahara" className="block text-slate-400 font-medium mb-1">
+                  Nama Bendahara
+                </label>
+                <input
+                  id="input-sign-bendahara"
+                  type="text"
+                  disabled={!isAdmin}
+                  value={formSettings.bendahara}
+                  onChange={(e) => setFormSettings({ ...formSettings, bendahara: e.target.value })}
+                  placeholder="Bambang Pamungkas, S.Kom."
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-white focus:outline-none focus:border-emerald-500 disabled:opacity-70 disabled:cursor-not-allowed"
+                  required
+                />
+              </div>
+            </div>
+
+            {/* Koordinator Jimpitan */}
+            <div className="p-3.5 rounded-xl bg-cyan-950/20 border border-cyan-800/40 space-y-2 sm:col-span-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-cyan-300 uppercase tracking-wider block">
+                  3. KOORDINATOR JIMPITAN (Khusus Laporan & Bukti Jimpitan)
+                </span>
+                <span className="text-[10px] text-cyan-400/80 bg-cyan-500/10 px-2 py-0.5 rounded-md border border-cyan-500/20">
+                  Menandatangani Laporan Jimpitan
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                <div>
+                  <label htmlFor="input-sign-jimpitan-nama" className="block text-slate-300 font-medium mb-1">
+                    Nama Koordinator Jimpitan <span className="text-rose-400">*</span>
+                  </label>
+                  <input
+                    id="input-sign-jimpitan-nama"
+                    type="text"
+                    disabled={!isAdmin}
+                    value={formSettings.koordinatorJimpitanNama || ''}
+                    onChange={(e) => {
+                      setErrorMessage('');
+                      setFormSettings({ ...formSettings, koordinatorJimpitanNama: e.target.value });
+                    }}
+                    placeholder="Budi Santoso"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-cyan-700/60 text-white font-medium focus:outline-none focus:border-cyan-400 disabled:opacity-70 disabled:cursor-not-allowed"
+                    required
+                  />
+                  {!formSettings.koordinatorJimpitanNama?.trim() && (
+                    <p className="text-[10px] text-rose-400 mt-1">Nama Koordinator Jimpitan belum diatur.</p>
+                  )}
+                </div>
+                <div>
+                  <label htmlFor="input-sign-jimpitan-jabatan" className="block text-slate-300 font-medium mb-1">
+                    Jabatan Penandatangan
+                  </label>
+                  <input
+                    id="input-sign-jimpitan-jabatan"
+                    type="text"
+                    disabled={!isAdmin}
+                    value={formSettings.koordinatorJimpitanJabatan || 'Koordinator Jimpitan'}
+                    onChange={(e) => setFormSettings({ ...formSettings, koordinatorJimpitanJabatan: e.target.value })}
+                    placeholder="Koordinator Jimpitan"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-white focus:outline-none focus:border-cyan-400 disabled:opacity-70 disabled:cursor-not-allowed"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Sekretaris */}
+            <div className="p-3.5 rounded-xl bg-slate-950/70 border border-slate-800 space-y-2 sm:col-span-2">
+              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
+                4. SEKRETARIS RT
+              </span>
+              <div>
+                <label htmlFor="input-sign-sekretaris" className="block text-slate-400 font-medium mb-1">
+                  Nama Sekretaris
+                </label>
+                <input
+                  id="input-sign-sekretaris"
+                  type="text"
+                  disabled={!isAdmin}
+                  value={formSettings.sekretaris || ''}
+                  onChange={(e) => setFormSettings({ ...formSettings, sekretaris: e.target.value })}
+                  placeholder="Siti Aminah"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-white focus:outline-none focus:border-emerald-500 disabled:opacity-70 disabled:cursor-not-allowed"
+                />
+              </div>
             </div>
           </div>
         </div>

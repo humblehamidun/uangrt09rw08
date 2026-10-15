@@ -87,6 +87,22 @@ export interface BopRecord {
   updatedBy?: string;
 }
 
+export interface ReportSignatories {
+  ketuaRT?: {
+    nama: string;
+  };
+  bendahara?: {
+    nama: string;
+  };
+  koordinatorJimpitan?: {
+    nama: string;
+    jabatan?: string;
+  };
+  sekretaris?: {
+    nama: string;
+  };
+}
+
 export interface AppSettings {
   namaRT: string;
   rw: string;
@@ -96,6 +112,9 @@ export interface AppSettings {
   provinsi?: string;
   ketuaRT: string;
   bendahara: string;
+  koordinatorJimpitanNama?: string;
+  koordinatorJimpitanJabatan?: string;
+  sekretaris?: string;
   kontakWa?: string;
   nominalKas: number;
   nominalUangMeja: number;
@@ -103,6 +122,7 @@ export interface AppSettings {
   nominalDanaAcaraTahunan: number;
   nominalUangSosial: number;
   nominalJimpitan: number;
+  signatories?: ReportSignatories;
 }
 
 export type SettingsConfig = AppSettings;
@@ -126,6 +146,8 @@ export interface AppUser {
 export type BukuKasSourceType = 'iuran' | 'jimpitan' | 'donasi' | 'bop' | 'saldo_awal' | 'dana_talangan' | 'pelunasan_talangan' | 'pengeluaran_dana';
 export type BukuKasStatus = 'Aktif' | 'Dibatalkan';
 
+export type SumberDanaPengeluaran = 'iuran' | 'jimpitan' | 'donasi' | 'umum';
+
 export type PengeluaranDanaKategori = 
   | 'Petugas Sampah'
   | 'Uang Meja'
@@ -144,6 +166,7 @@ export interface PengeluaranDana {
   tanggal: string; // YYYY-MM-DD
   noBukti: string; // OUT-YYYYMMDD-XXXX
   kategori: PengeluaranDanaKategori | string;
+  sumberDana?: SumberDanaPengeluaran; // Mengurangi iuran, jimpitan, donasi, atau kas umum
   nominal: number;
   penerima: string;
   wargaId?: string;
@@ -245,6 +268,7 @@ export interface BukuKasRecord {
   cancelledAt?: string;
   cancelReason?: string;
   keterangan?: string;
+  sumberDana?: SumberDanaPengeluaran;
 }
 
 export interface SaldoAwalRecord {

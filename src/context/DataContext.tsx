@@ -191,7 +191,27 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (stored) {
         const parsed = JSON.parse(stored);
         if (parsed && typeof parsed === 'object') {
-          const settings = { ...DEFAULT_SETTINGS, ...(parsed.settings || {}) };
+          const sKoorNama = parsed.settings?.koordinatorJimpitanNama || parsed.settings?.signatories?.koordinatorJimpitan?.nama || DEFAULT_SETTINGS.koordinatorJimpitanNama || 'Budi Santoso';
+          const sKoorJabatan = parsed.settings?.koordinatorJimpitanJabatan || parsed.settings?.signatories?.koordinatorJimpitan?.jabatan || DEFAULT_SETTINGS.koordinatorJimpitanJabatan || 'Koordinator Jimpitan';
+          const sKetua = parsed.settings?.ketuaRT || parsed.settings?.signatories?.ketuaRT?.nama || DEFAULT_SETTINGS.ketuaRT;
+          const sBendahara = parsed.settings?.bendahara || parsed.settings?.signatories?.bendahara?.nama || DEFAULT_SETTINGS.bendahara;
+          const sSekretaris = parsed.settings?.sekretaris || parsed.settings?.signatories?.sekretaris?.nama || DEFAULT_SETTINGS.sekretaris || 'Siti Aminah';
+
+          const settings = { 
+            ...DEFAULT_SETTINGS, 
+            ...(parsed.settings || {}),
+            ketuaRT: sKetua,
+            bendahara: sBendahara,
+            koordinatorJimpitanNama: sKoorNama,
+            koordinatorJimpitanJabatan: sKoorJabatan,
+            sekretaris: sSekretaris,
+            signatories: {
+              ketuaRT: { nama: sKetua },
+              bendahara: { nama: sBendahara },
+              koordinatorJimpitan: { nama: sKoorNama, jabatan: sKoorJabatan },
+              sekretaris: { nama: sSekretaris }
+            }
+          };
           const warga = Array.isArray(parsed.warga) ? parsed.warga : [];
           const iuran = Array.isArray(parsed.iuran) ? parsed.iuran : [];
           const jimpitan = Array.isArray(parsed.jimpitan) ? parsed.jimpitan : [];
@@ -212,7 +232,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 createdBy: 'H. Sugiyanto, S.E.',
                 createdAt: '2026-01-01T08:00:00.000Z',
               }];
-          const pengeluaranDana: PengeluaranDana[] = Array.isArray(parsed.pengeluaranDana) ? parsed.pengeluaranDana : [
+          const pengeluaranDana: PengeluaranDana[] = Array.isArray(parsed.pengeluaranDana) 
+            ? parsed.pengeluaranDana.map((p: PengeluaranDana) => ({ ...p, sumberDana: p.sumberDana || 'iuran' }))
+            : [
             {
               id: 'out-1',
               tanggal: '2026-09-02',
@@ -1816,6 +1838,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       const newRecord: PengeluaranDana = {
         ...itemInput,
+        sumberDana: itemInput.sumberDana || 'iuran',
         id: newId,
         noBukti,
         sourceType: 'pengeluaran_dana',
@@ -1848,6 +1871,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         updatedBy: userName,
         updatedAt: now,
         keterangan: newRecord.keterangan || (newRecord.periode ? `Periode: ${newRecord.periode}` : undefined),
+        sumberDana: newRecord.sumberDana,
       };
 
       const updatedBk = computeBukuKasRunningBalances([...(prev.bukuKas || []), newBkItem]);
@@ -1859,7 +1883,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
     });
 
-    logAudit('Tambah Pengeluaran Dana', `${itemInput.kategori}: Rp ${itemInput.nominal.toLocaleString('id-ID')} kepada ${itemInput.penerima}`);
+    const sumberLabel = itemInput.sumberDana ? ` [Sumber: ${itemInput.sumberDana.toUpperCase()}]` : '';
+    logAudit('Tambah Pengeluaran Dana', `${itemInput.kategori}${sumberLabel}: Rp ${itemInput.nominal.toLocaleString('id-ID')} kepada ${itemInput.penerima}`);
     addToast(`Pengeluaran dana ${itemInput.kategori} berhasil dicatat dan masuk ke Buku Kas.`, 'success');
     return { success: true, record: createdRecord };
   }, [currentUser, addToast, logAudit]);
@@ -1908,6 +1933,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             ...b,
             tanggal: targetUpdated.tanggal || b.tanggal,
             kategori: targetUpdated.kategori,
+            sumberDana: targetUpdated.sumberDana,
             uraian: `${uraianDesc}${penerimaStr}`,
             pengeluaran: targetUpdated.nominal,
             keterangan: targetUpdated.keterangan || (targetUpdated.periode ? `Periode: ${targetUpdated.periode}` : undefined),

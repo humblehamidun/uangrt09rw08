@@ -95,7 +95,7 @@ export const DanaTalanganView: React.FC = () => {
     'Tenda, Kursi & Sound System Duka',
     'Konsumsi Pengajian / Doa Bersama',
     'Administrasi Pemakaman / Surat Kematian',
-    'Kebutuhan Darurat Keluarga Musibah Lainnya'
+    'Lainnya'
   ];
 
   // Quick amounts

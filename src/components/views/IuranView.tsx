@@ -12,10 +12,15 @@ import {
   FileEdit,
   Sparkles,
   ArrowUpDown,
-  Printer
+  Printer,
+  ArrowDownRight,
+  Receipt,
+  Wallet,
+  TrendingDown
 } from 'lucide-react';
 import { formatRupiah, NAMA_BULAN, downloadCSV } from '../../utils/format';
 import { PrintReportHeader, PrintReportFooter, PrintPageStyle } from '../common/PrintReportLayout';
+import { FundExpenseSection } from '../common/FundExpenseSection';
 
 export const IuranView: React.FC = () => {
   const { 
@@ -28,6 +33,9 @@ export const IuranView: React.FC = () => {
   const today = new Date();
   const [selectedBulan, setSelectedBulan] = useState<number>(today.getMonth() + 1);
   const [selectedTahun, setSelectedTahun] = useState<number>(today.getFullYear());
+
+  // Sub-menu Tab: 'penerimaan' | 'pengeluaran'
+  const [activeSubMenu, setActiveSubMenu] = useState<'penerimaan' | 'pengeluaran'>('penerimaan');
 
   // Search & Filter
   const [searchTerm, setSearchTerm] = useState('');
@@ -144,6 +152,24 @@ export const IuranView: React.FC = () => {
       persentaseTotalTertagih,
     };
   }, [wargaIuranRows, data.settings]);
+
+  // Active Iuran Expenses (sumberDana === 'iuran')
+  const iuranExpensesThisMonth = useMemo(() => {
+    return (data.pengeluaranDana || []).filter(p => {
+      if (p.status !== 'Aktif') return false;
+      const src = p.sumberDana || 'iuran';
+      if (src !== 'iuran') return false;
+      if (!p.tanggal) return false;
+      const [y, m] = p.tanggal.split('-');
+      return parseInt(y, 10) === selectedTahun && parseInt(m, 10) === selectedBulan;
+    });
+  }, [data.pengeluaranDana, selectedTahun, selectedBulan]);
+
+  const totalPengeluaranIuranBulan = useMemo(() => {
+    return iuranExpensesThisMonth.reduce((sum, p) => sum + (p.nominal || 0), 0);
+  }, [iuranExpensesThisMonth]);
+
+  const saldoBersihIuranBulan = rekap.totalSeluruhIuran - totalPengeluaranIuranBulan;
 
   // Handle Note Save
   const handleSaveNote = (wargaId: string) => {
@@ -282,8 +308,127 @@ export const IuranView: React.FC = () => {
         </div>
       </div>
 
-      {/* Filter and Search */}
-      <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 p-4 rounded-2xl bg-slate-900/50 border border-slate-800/80">
+      {/* Sub Menu Navigation: Penerimaan Iuran vs Pengeluaran Iuran */}
+      <div className="flex flex-wrap items-center gap-2 border-b border-slate-800 pb-3 no-print">
+        <button
+          id="btn-submenu-penerimaan-iuran"
+          type="button"
+          onClick={() => setActiveSubMenu('penerimaan')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            activeSubMenu === 'penerimaan'
+              ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-950/40'
+              : 'bg-slate-900/80 text-slate-400 hover:text-white hover:bg-slate-800 border border-slate-800'
+          }`}
+        >
+          <Coins className="w-4 h-4" />
+          <span>Penerimaan Iuran Warga</span>
+        </button>
+
+        <button
+          id="btn-submenu-pengeluaran-iuran"
+          type="button"
+          onClick={() => setActiveSubMenu('pengeluaran')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            activeSubMenu === 'pengeluaran'
+              ? 'bg-rose-600 text-white shadow-lg shadow-rose-950/40'
+              : 'bg-slate-900/80 text-slate-400 hover:text-white hover:bg-slate-800 border border-slate-800'
+          }`}
+        >
+          <ArrowDownRight className="w-4 h-4" />
+          <span>Sub Menu Pengeluaran Iuran</span>
+          {iuranExpensesThisMonth.length > 0 && (
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+              activeSubMenu === 'pengeluaran' ? 'bg-white text-rose-700' : 'bg-rose-500/20 text-rose-300'
+            }`}>
+              {iuranExpensesThisMonth.length}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {activeSubMenu === 'pengeluaran' ? (
+        <FundExpenseSection 
+          fundType="iuran" 
+          title="Iuran Warga" 
+          selectedBulan={selectedBulan} 
+          selectedTahun={selectedTahun} 
+          totalUangMasuk={rekap.totalSeluruhIuran} 
+        />
+      ) : (
+        <>
+          {/* Ringkasan Saldo Uang Masuk vs Pengeluaran Iuran */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 no-print">
+            <div className="p-4 rounded-2xl bg-slate-900/70 border border-slate-800 shadow-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                  Uang Masuk Iuran ({NAMA_BULAN[selectedBulan - 1].toUpperCase()})
+                </span>
+                <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                  <Wallet className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="mt-2 text-2xl font-black font-mono text-emerald-400">
+                {formatRupiah(rekap.totalSeluruhIuran)}
+              </div>
+              <p className="text-[11px] text-slate-500 mt-1">
+                Dari {rekap.sudahBayarCount} warga ({rekap.wargaLunasCount} lunas)
+              </p>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-slate-900/70 border border-slate-800 shadow-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                  Pengeluaran dari Iuran
+                </span>
+                <div className="p-2 rounded-xl bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                  <TrendingDown className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="mt-2 text-2xl font-black font-mono text-rose-400">
+                {formatRupiah(totalPengeluaranIuranBulan)}
+              </div>
+              <div className="flex items-center justify-between mt-1">
+                <span className="text-[11px] text-slate-500">
+                  {iuranExpensesThisMonth.length} pengeluaran bulan ini
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setActiveSubMenu('pengeluaran')}
+                  className="text-[11px] text-rose-400 hover:underline font-semibold"
+                >
+                  Buka Sub Menu →
+                </button>
+              </div>
+            </div>
+
+            <div className={`p-4 rounded-2xl border shadow-sm ${
+              saldoBersihIuranBulan >= 0 
+                ? 'bg-gradient-to-br from-slate-900 to-slate-950 border-emerald-500/30' 
+                : 'bg-gradient-to-br from-rose-950/20 to-slate-950 border-rose-500/30'
+            }`}>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                  Sisa Saldo Kas Iuran
+                </span>
+                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                  saldoBersihIuranBulan >= 0 
+                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' 
+                    : 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                }`}>
+                  {saldoBersihIuranBulan >= 0 ? 'Surplus' : 'Defisit'}
+                </span>
+              </div>
+              <div className={`mt-2 text-2xl font-black font-mono ${saldoBersihIuranBulan >= 0 ? 'text-cyan-300' : 'text-rose-400'}`}>
+                {formatRupiah(saldoBersihIuranBulan)}
+              </div>
+              <p className="text-[11px] text-slate-400 mt-1">
+                = Uang Masuk dikurangi Pengeluaran
+              </p>
+            </div>
+          </div>
+
+          {/* Filter and Search */}
+          <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 p-4 rounded-2xl bg-slate-900/50 border border-slate-800/80">
         
         <div className="sm:col-span-8 relative">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -751,6 +896,8 @@ export const IuranView: React.FC = () => {
         </div>
 
       </div>
+        </>
+      )}
 
     </div>
   );

@@ -9,10 +9,15 @@ import {
   CheckCircle2, 
   Clock, 
   AlertCircle,
-  Printer
+  Printer,
+  ArrowDownRight,
+  TrendingDown,
+  Wallet,
+  Receipt
 } from 'lucide-react';
 import { formatRupiah, NAMA_BULAN, downloadCSV, getWeeksInMonth } from '../../utils/format';
-import { PrintReportHeader, PrintReportFooter, PrintPageStyle } from '../common/PrintReportLayout';
+import { PrintReportHeader, PrintJimpitanFooter, PrintPageStyle } from '../common/PrintReportLayout';
+import { FundExpenseSection } from '../common/FundExpenseSection';
 
 export const JimpitanView: React.FC = () => {
   const { data, toggleJimpitanMinggu, getJimpitanForWarga } = useData();
@@ -20,6 +25,10 @@ export const JimpitanView: React.FC = () => {
   const today = new Date();
   const [selectedBulan, setSelectedBulan] = useState<number>(today.getMonth() + 1);
   const [selectedTahun, setSelectedTahun] = useState<number>(today.getFullYear());
+
+  // Sub-menu Tab: 'penerimaan' | 'pengeluaran'
+  const [activeSubMenu, setActiveSubMenu] = useState<'penerimaan' | 'pengeluaran'>('penerimaan');
+
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'All' | 'Lengkap' | 'Sebagian' | 'Kosong'>('All');
 
@@ -143,6 +152,23 @@ export const JimpitanView: React.FC = () => {
       persentase,
     };
   }, [wargaJimpitanRows, data.settings.nominalJimpitan]);
+
+  // Active Jimpitan Expenses (sumberDana === 'jimpitan')
+  const jimpitanExpensesThisMonth = useMemo(() => {
+    return (data.pengeluaranDana || []).filter(p => {
+      if (p.status !== 'Aktif') return false;
+      if (p.sumberDana !== 'jimpitan') return false;
+      if (!p.tanggal) return false;
+      const [y, m] = p.tanggal.split('-');
+      return parseInt(y, 10) === selectedTahun && parseInt(m, 10) === selectedBulan;
+    });
+  }, [data.pengeluaranDana, selectedTahun, selectedBulan]);
+
+  const totalPengeluaranJimpitanBulan = useMemo(() => {
+    return jimpitanExpensesThisMonth.reduce((sum, p) => sum + (p.nominal || 0), 0);
+  }, [jimpitanExpensesThisMonth]);
+
+  const saldoBersihJimpitanBulan = rekap.totalJimpitanBulan - totalPengeluaranJimpitanBulan;
 
   // Export CSV
   const handleExportCSV = () => {
@@ -283,376 +309,479 @@ export const JimpitanView: React.FC = () => {
         </div>
       </div>
 
-      {/* Filter and Search */}
-      <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 p-4 rounded-2xl bg-slate-900/50 border border-slate-800/80">
-        
-        <div className="sm:col-span-8 relative">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-          <input
-            id="input-search-jimpitan"
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Cari warga atau nomor rumah..."
-            className="w-full pl-10 pr-4 py-2 rounded-xl bg-slate-950/80 border border-slate-700/80 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-cyan-500"
-          />
-        </div>
+      {/* Sub Menu Navigation: Penerimaan Jimpitan vs Pengeluaran Jimpitan */}
+      <div className="flex flex-wrap items-center gap-2 border-b border-slate-800 pb-3 no-print">
+        <button
+          id="btn-submenu-penerimaan-jimpitan"
+          type="button"
+          onClick={() => setActiveSubMenu('penerimaan')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            activeSubMenu === 'penerimaan'
+              ? 'bg-cyan-600 text-white shadow-lg shadow-cyan-950/40'
+              : 'bg-slate-900/80 text-slate-400 hover:text-white hover:bg-slate-800 border border-slate-800'
+          }`}
+        >
+          <CircleDollarSign className="w-4 h-4" />
+          <span>Penerimaan Jimpitan Warga</span>
+        </button>
 
-        <div className="sm:col-span-4 flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-950/80 border border-slate-700/80 text-xs">
-          <span className="text-slate-400 text-[11px]">Filter Status:</span>
-          <select
-            id="filter-status-jimpitan"
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as any)}
-            className="w-full bg-transparent text-white font-medium focus:outline-none cursor-pointer"
-          >
-            <option value="All" className="bg-slate-900">Semua Warga</option>
-            <option value="Lengkap" className="bg-slate-900">Lengkap (5 Minggu)</option>
-            <option value="Sebagian" className="bg-slate-900">Sebagian (1 - 4 Minggu)</option>
-            <option value="Kosong" className="bg-slate-900">Belum Bayar (0 Minggu)</option>
-          </select>
-        </div>
-
+        <button
+          id="btn-submenu-pengeluaran-jimpitan"
+          type="button"
+          onClick={() => setActiveSubMenu('pengeluaran')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            activeSubMenu === 'pengeluaran'
+              ? 'bg-rose-600 text-white shadow-lg shadow-rose-950/40'
+              : 'bg-slate-900/80 text-slate-400 hover:text-white hover:bg-slate-800 border border-slate-800'
+          }`}
+        >
+          <ArrowDownRight className="w-4 h-4" />
+          <span>Sub Menu Pengeluaran Jimpitan</span>
+          {jimpitanExpensesThisMonth.length > 0 && (
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+              activeSubMenu === 'pengeluaran' ? 'bg-white text-rose-700' : 'bg-rose-500/20 text-rose-300'
+            }`}>
+              {jimpitanExpensesThisMonth.length}
+            </span>
+          )}
+        </button>
       </div>
 
-      {/* Print Page Styles */}
-      <PrintPageStyle landscape={true} />
-
-      {/* Jimpitan Table / Printable Card */}
-      <div id="printable-report-card" className="rounded-2xl border border-slate-800 bg-slate-900/60 overflow-hidden shadow-xl print:border-none print:bg-white print:p-0 print:shadow-none">
-        
-        {/* Printable Formal Header */}
-        <PrintReportHeader
-          title="LAPORAN JIMPITAN KELENG KOIN WARGA"
-          periode={`${NAMA_BULAN[selectedBulan - 1]} ${selectedTahun}`}
+      {activeSubMenu === 'pengeluaran' ? (
+        <FundExpenseSection
+          fundType="jimpitan"
+          title="Jimpitan RT"
+          selectedBulan={selectedBulan}
+          selectedTahun={selectedTahun}
+          totalUangMasuk={rekap.totalJimpitanBulan}
         />
-
-        <div className="overflow-x-auto">
-          <table id="table-jimpitan" className="w-full text-left border-collapse text-xs whitespace-nowrap sm:whitespace-normal print:border print:border-black print:text-black print:text-[9.5pt]">
-            <thead>
-              <tr className="bg-slate-950/90 border-b border-slate-800 text-slate-300 font-semibold tracking-wide print:bg-gray-200 print:text-black print:border-black">
-                <th className="py-3.5 px-3 w-12 text-center print:border print:border-black">No</th>
-                <th className="col-nomor-rumah py-3.5 px-3 w-24 text-center print:border print:border-black">Nomor Rumah</th>
-                <th className="col-nama-warga py-3.5 px-4 min-w-[140px] print:border print:border-black">Nama Warga</th>
-                
-                {/* 5 Weeks headers with date ranges */}
-                {weeksInfo.map(w => (
-                  <th key={w.id} className="py-3.5 px-2 text-center w-24">
-                    <div className="flex flex-col items-center">
-                      <span className="text-cyan-400 font-bold">{w.label}</span>
-                      <span className="text-[10px] text-slate-400 font-normal">{w.range}</span>
-                    </div>
-                  </th>
-                ))}
-
-                <th className="py-3.5 px-4 text-right w-28">
-                  <span className="text-white font-bold">Total Jimpitan</span>
-                </th>
-
-                <th className="py-3.5 px-4 text-center w-28">
-                  <span className="text-slate-300 font-bold">Status</span>
-                </th>
-              </tr>
-            </thead>
-
-            <tbody className="divide-y divide-slate-800/70">
-              {filteredRows.length === 0 ? (
-                <tr>
-                  <td colSpan={10} className="py-12 text-center text-slate-400">
-                    <div className="flex flex-col items-center justify-center gap-2">
-                      <AlertCircle className="w-8 h-8 text-slate-600" />
-                      <span className="font-medium text-slate-300">Tidak ada data jimpitan warga</span>
-                    </div>
-                  </td>
-                </tr>
-              ) : (
-                filteredRows.map((row) => {
-                  const isLengkap = row.checkedCount === 5;
-                  const isSebagian = row.checkedCount > 0 && row.checkedCount < 5;
-
-                  return (
-                    <tr 
-                      key={row.warga.id}
-                      className={`hover:bg-slate-800/40 transition-colors ${
-                        isLengkap ? 'bg-cyan-950/10' : ''
-                      }`}
-                    >
-                      <td className="py-3 px-3 text-center font-mono text-slate-400 print:border print:border-black">{row.index}</td>
-                      <td className="col-nomor-rumah py-3 px-3 text-center print:border print:border-black">
-                        <span className="inline-block px-2 py-0.5 rounded-lg bg-slate-800 font-mono font-bold text-cyan-300 text-xs border border-slate-700/60 print:bg-transparent print:text-black print:border-none">
-                          {row.warga.nomorRumah}
-                        </span>
-                      </td>
-                      <td className="col-nama-warga py-3 px-4 font-semibold text-white print:text-black print:border print:border-black">
-                        {row.warga.namaWarga || row.warga.nama}
-                      </td>
-
-                      {/* Minggu 1 */}
-                      <td className="py-3 px-2 text-center">
-                        <label 
-                          htmlFor={`cb-jimp-m1-${row.warga.id}`}
-                          className="inline-flex items-center justify-center p-1.5 cursor-pointer group"
-                        >
-                          <input
-                            id={`cb-jimp-m1-${row.warga.id}`}
-                            type="checkbox"
-                            checked={row.m1}
-                            onChange={(e) => toggleJimpitanMinggu(row.warga.id, selectedBulan, selectedTahun, 'minggu1', e.target.checked)}
-                            className="sr-only"
-                          />
-                          <div className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all duration-200 border ${
-                            row.m1 
-                              ? 'bg-cyan-500 border-cyan-400 text-white shadow-md shadow-cyan-950/50 scale-105' 
-                              : 'bg-slate-800/80 border-slate-700 hover:border-slate-500 text-transparent group-hover:scale-105'
-                          }`}>
-                            <Check className={`w-4 h-4 stroke-[3] transition-transform ${row.m1 ? 'scale-100 opacity-100' : 'scale-75 opacity-0'}`} />
-                          </div>
-                        </label>
-                      </td>
-
-                      {/* Minggu 2 */}
-                      <td className="py-3 px-2 text-center">
-                        <label 
-                          htmlFor={`cb-jimp-m2-${row.warga.id}`}
-                          className="inline-flex items-center justify-center p-1.5 cursor-pointer group"
-                        >
-                          <input
-                            id={`cb-jimp-m2-${row.warga.id}`}
-                            type="checkbox"
-                            checked={row.m2}
-                            onChange={(e) => toggleJimpitanMinggu(row.warga.id, selectedBulan, selectedTahun, 'minggu2', e.target.checked)}
-                            className="sr-only"
-                          />
-                          <div className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all duration-200 border ${
-                            row.m2 
-                              ? 'bg-cyan-500 border-cyan-400 text-white shadow-md shadow-cyan-950/50 scale-105' 
-                              : 'bg-slate-800/80 border-slate-700 hover:border-slate-500 text-transparent group-hover:scale-105'
-                          }`}>
-                            <Check className={`w-4 h-4 stroke-[3] transition-transform ${row.m2 ? 'scale-100 opacity-100' : 'scale-75 opacity-0'}`} />
-                          </div>
-                        </label>
-                      </td>
-
-                      {/* Minggu 3 */}
-                      <td className="py-3 px-2 text-center">
-                        <label 
-                          htmlFor={`cb-jimp-m3-${row.warga.id}`}
-                          className="inline-flex items-center justify-center p-1.5 cursor-pointer group"
-                        >
-                          <input
-                            id={`cb-jimp-m3-${row.warga.id}`}
-                            type="checkbox"
-                            checked={row.m3}
-                            onChange={(e) => toggleJimpitanMinggu(row.warga.id, selectedBulan, selectedTahun, 'minggu3', e.target.checked)}
-                            className="sr-only"
-                          />
-                          <div className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all duration-200 border ${
-                            row.m3 
-                              ? 'bg-cyan-500 border-cyan-400 text-white shadow-md shadow-cyan-950/50 scale-105' 
-                              : 'bg-slate-800/80 border-slate-700 hover:border-slate-500 text-transparent group-hover:scale-105'
-                          }`}>
-                            <Check className={`w-4 h-4 stroke-[3] transition-transform ${row.m3 ? 'scale-100 opacity-100' : 'scale-75 opacity-0'}`} />
-                          </div>
-                        </label>
-                      </td>
-
-                      {/* Minggu 4 */}
-                      <td className="py-3 px-2 text-center">
-                        <label 
-                          htmlFor={`cb-jimp-m4-${row.warga.id}`}
-                          className="inline-flex items-center justify-center p-1.5 cursor-pointer group"
-                        >
-                          <input
-                            id={`cb-jimp-m4-${row.warga.id}`}
-                            type="checkbox"
-                            checked={row.m4}
-                            onChange={(e) => toggleJimpitanMinggu(row.warga.id, selectedBulan, selectedTahun, 'minggu4', e.target.checked)}
-                            className="sr-only"
-                          />
-                          <div className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all duration-200 border ${
-                            row.m4 
-                              ? 'bg-cyan-500 border-cyan-400 text-white shadow-md shadow-cyan-950/50 scale-105' 
-                              : 'bg-slate-800/80 border-slate-700 hover:border-slate-500 text-transparent group-hover:scale-105'
-                          }`}>
-                            <Check className={`w-4 h-4 stroke-[3] transition-transform ${row.m4 ? 'scale-100 opacity-100' : 'scale-75 opacity-0'}`} />
-                          </div>
-                        </label>
-                      </td>
-
-                      {/* Minggu 5 */}
-                      <td className="py-3 px-2 text-center">
-                        <label 
-                          htmlFor={`cb-jimp-m5-${row.warga.id}`}
-                          className="inline-flex items-center justify-center p-1.5 cursor-pointer group"
-                        >
-                          <input
-                            id={`cb-jimp-m5-${row.warga.id}`}
-                            type="checkbox"
-                            checked={row.m5}
-                            onChange={(e) => toggleJimpitanMinggu(row.warga.id, selectedBulan, selectedTahun, 'minggu5', e.target.checked)}
-                            className="sr-only"
-                          />
-                          <div className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all duration-200 border ${
-                            row.m5 
-                              ? 'bg-cyan-500 border-cyan-400 text-white shadow-md shadow-cyan-950/50 scale-105' 
-                              : 'bg-slate-800/80 border-slate-700 hover:border-slate-500 text-transparent group-hover:scale-105'
-                          }`}>
-                            <Check className={`w-4 h-4 stroke-[3] transition-transform ${row.m5 ? 'scale-100 opacity-100' : 'scale-75 opacity-0'}`} />
-                          </div>
-                        </label>
-                      </td>
-
-                      {/* Total Jimpitan */}
-                      <td className="py-3 px-4 text-right">
-                        <span className={`font-mono font-bold text-sm ${
-                          row.total > 0 ? 'text-cyan-400' : 'text-slate-500'
-                        }`}>
-                          {formatRupiah(row.total)}
-                        </span>
-                      </td>
-
-                      {/* Status */}
-                      <td className="py-3 px-4 text-center">
-                        <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
-                          isLengkap 
-                            ? 'bg-cyan-500/15 text-cyan-400 border-cyan-500/30' 
-                            : isSebagian 
-                              ? 'bg-amber-500/15 text-amber-400 border-amber-500/30' 
-                              : 'bg-slate-800 text-slate-400 border-slate-700'
-                        }`}>
-                          {isLengkap ? <CheckCircle2 className="w-3 h-3" /> : isSebagian ? <Clock className="w-3 h-3" /> : null}
-                          {row.checkedCount} / 5 Pekan
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Printable Formal Footer */}
-        <PrintReportFooter
-          ketuaRT={data.settings.ketuaRT || 'H. Sugiyanto, S.E.'}
-          bendahara={data.settings.bendahara || 'Bambang Pamungkas, S.Kom.'}
-          lokasi="Semarang"
-        />
-      </div>
-
-      {/* Section 12: REKAP JIMPITAN */}
-      <div id="rekap-jimpitan-section" className="p-6 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-800 shadow-xl space-y-6 print:hidden">
-        
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-4 border-b border-slate-800">
-          <div>
-            <h3 className="text-base font-bold text-white tracking-tight flex items-center gap-2">
-              <CircleDollarSign className="w-4 h-4 text-cyan-400" />
-              REKAP JIMPITAN BULAN {NAMA_BULAN[selectedBulan - 1].toUpperCase()} {selectedTahun}
-            </h3>
-            <p className="text-xs text-slate-400">
-              Total hasil pengumpulan jimpitan per pekan untuk kas operasional lingkungan
-            </p>
-          </div>
-          <div className="text-right">
-            <span className="text-xs text-slate-400">TOTAL JIMPITAN BULAN INI:</span>
-            <div className="text-2xl font-extrabold font-mono text-cyan-400">
-              {formatRupiah(rekap.totalJimpitanBulan)}
+      ) : (
+        <>
+          {/* Ringkasan Saldo Uang Masuk vs Pengeluaran Jimpitan */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 no-print">
+            <div className="p-4 rounded-2xl bg-slate-900/70 border border-slate-800 shadow-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                  Uang Masuk Jimpitan ({NAMA_BULAN[selectedBulan - 1].toUpperCase()})
+                </span>
+                <div className="p-2 rounded-xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
+                  <Wallet className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="mt-2 text-2xl font-black font-mono text-cyan-400">
+                {formatRupiah(rekap.totalJimpitanBulan)}
+              </div>
+              <div className="mt-1 text-[11px] text-slate-400">
+                Dari {rekap.wargaMembayar} warga ({rekap.persentase}% partisipasi)
+              </div>
             </div>
-          </div>
-        </div>
 
-        {/* 5 Weekly Totals */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-          
-          <div className="p-3.5 rounded-xl bg-slate-900/90 border border-slate-800">
-            <div className="text-[10px] uppercase font-bold tracking-wider text-slate-400">
-              TOTAL MINGGU 1
+            <div className="p-4 rounded-2xl bg-slate-900/70 border border-slate-800 shadow-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                  Pengeluaran dari Jimpitan
+                </span>
+                <div className="p-2 rounded-xl bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                  <TrendingDown className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="mt-2 text-2xl font-black font-mono text-rose-400">
+                {formatRupiah(totalPengeluaranJimpitanBulan)}
+              </div>
+              <div className="mt-1 text-[11px] text-slate-400">
+                {jimpitanExpensesThisMonth.length} pengeluaran bulan ini
+              </div>
             </div>
-            <div className="text-base font-bold font-mono text-cyan-400 mt-1">
-              {formatRupiah(rekap.totalM1)}
-            </div>
-            <div className="text-[10px] text-slate-500 mt-0.5">{rekap.countM1} warga membayar</div>
-          </div>
 
-          <div className="p-3.5 rounded-xl bg-slate-900/90 border border-slate-800">
-            <div className="text-[10px] uppercase font-bold tracking-wider text-slate-400">
-              TOTAL MINGGU 2
-            </div>
-            <div className="text-base font-bold font-mono text-cyan-400 mt-1">
-              {formatRupiah(rekap.totalM2)}
-            </div>
-            <div className="text-[10px] text-slate-500 mt-0.5">{rekap.countM2} warga membayar</div>
-          </div>
-
-          <div className="p-3.5 rounded-xl bg-slate-900/90 border border-slate-800">
-            <div className="text-[10px] uppercase font-bold tracking-wider text-slate-400">
-              TOTAL MINGGU 3
-            </div>
-            <div className="text-base font-bold font-mono text-cyan-400 mt-1">
-              {formatRupiah(rekap.totalM3)}
-            </div>
-            <div className="text-[10px] text-slate-500 mt-0.5">{rekap.countM3} warga membayar</div>
-          </div>
-
-          <div className="p-3.5 rounded-xl bg-slate-900/90 border border-slate-800">
-            <div className="text-[10px] uppercase font-bold tracking-wider text-slate-400">
-              TOTAL MINGGU 4
-            </div>
-            <div className="text-base font-bold font-mono text-cyan-400 mt-1">
-              {formatRupiah(rekap.totalM4)}
-            </div>
-            <div className="text-[10px] text-slate-500 mt-0.5">{rekap.countM4} warga membayar</div>
-          </div>
-
-          <div className="p-3.5 rounded-xl bg-slate-900/90 border border-slate-800">
-            <div className="text-[10px] uppercase font-bold tracking-wider text-slate-400">
-              TOTAL MINGGU 5
-            </div>
-            <div className="text-base font-bold font-mono text-cyan-400 mt-1">
-              {formatRupiah(rekap.totalM5)}
-            </div>
-            <div className="text-[10px] text-slate-500 mt-0.5">{rekap.countM5} warga membayar</div>
-          </div>
-
-        </div>
-
-        {/* Summary Stats */}
-        <div className="pt-2 border-t border-slate-800/80 space-y-3">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
-            <div>
-              <span className="text-slate-400">Warga Terdaftar:</span>
-              <div className="text-lg font-bold text-white font-mono mt-0.5">{rekap.totalWarga} warga</div>
-            </div>
-            <div>
-              <span className="text-slate-400">Warga Membayar:</span>
-              <div className="text-lg font-bold text-cyan-400 font-mono mt-0.5">{rekap.wargaMembayar} warga</div>
-            </div>
-            <div>
-              <span className="text-slate-400">Warga Belum Membayar:</span>
-              <div className="text-lg font-bold text-rose-400 font-mono mt-0.5">{rekap.wargaBelum} warga</div>
-            </div>
-            <div>
-              <span className="text-slate-400">Persentase Partisipasi:</span>
-              <div className="text-lg font-bold text-emerald-400 font-mono mt-0.5">{rekap.persentase}%</div>
+            <div className="p-4 rounded-2xl bg-slate-900/70 border border-slate-800 shadow-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                  Sisa Saldo Bersih Jimpitan
+                </span>
+                <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                  <CircleDollarSign className="w-4 h-4" />
+                </div>
+              </div>
+              <div className={`mt-2 text-2xl font-black font-mono ${
+                saldoBersihJimpitanBulan >= 0 ? 'text-emerald-400' : 'text-rose-400'
+              }`}>
+                {formatRupiah(saldoBersihJimpitanBulan)}
+              </div>
+              <div className="mt-1 text-[11px] text-slate-400">
+                Saldo bersih kas jimpitan periode ini
+              </div>
             </div>
           </div>
 
-          {/* Progress Bar */}
-          <div>
-            <div className="flex justify-between text-[11px] text-slate-400 mb-1 font-medium">
-              <span>Partisipasi Warga dalam Jimpitan Bulan Ini</span>
-              <span className="text-cyan-400 font-mono">{rekap.wargaMembayar} dari {rekap.totalWarga} warga aktif berpartisipasi</span>
-            </div>
-            <div className="w-full h-3 rounded-full bg-slate-800 overflow-hidden p-0.5 border border-slate-700/60">
-              <div 
-                className="h-full rounded-full bg-gradient-to-r from-cyan-500 to-blue-500 transition-all duration-500 shadow-sm"
-                style={{ width: `${rekap.persentase}%` }}
+          {/* Filter and Search */}
+          <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 p-4 rounded-2xl bg-slate-900/50 border border-slate-800/80">
+            <div className="sm:col-span-8 relative">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input
+                id="input-search-jimpitan"
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Cari warga atau nomor rumah..."
+                className="w-full pl-10 pr-4 py-2 rounded-xl bg-slate-950/80 border border-slate-700/80 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-cyan-500"
               />
             </div>
-          </div>
-        </div>
 
-      </div>
+            <div className="sm:col-span-4 flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-950/80 border border-slate-700/80 text-xs">
+              <span className="text-slate-400 text-[11px]">Filter Status:</span>
+              <select
+                id="filter-status-jimpitan"
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as any)}
+                className="w-full bg-transparent text-white font-medium focus:outline-none cursor-pointer"
+              >
+                <option value="All" className="bg-slate-900">Semua Warga</option>
+                <option value="Lengkap" className="bg-slate-900">Lengkap (5 Minggu)</option>
+                <option value="Sebagian" className="bg-slate-900">Sebagian (1 - 4 Minggu)</option>
+                <option value="Kosong" className="bg-slate-900">Belum Bayar (0 Minggu)</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Print Page Styles */}
+          <PrintPageStyle landscape={true} />
+
+          {/* Jimpitan Table / Printable Card */}
+          <div id="printable-report-card" className="rounded-2xl border border-slate-800 bg-slate-900/60 overflow-hidden shadow-xl print:border-none print:bg-white print:p-0 print:shadow-none">
+            
+            {/* Printable Formal Header */}
+            <PrintReportHeader
+              title="LAPORAN JIMPITAN KELENG KOIN WARGA"
+              periode={`${NAMA_BULAN[selectedBulan - 1]} ${selectedTahun}`}
+            />
+
+            <div className="overflow-x-auto">
+              <table id="table-jimpitan" className="w-full text-left border-collapse text-xs whitespace-nowrap sm:whitespace-normal print:border print:border-black print:text-black print:text-[9.5pt]">
+                <thead>
+                  <tr className="bg-slate-950/90 border-b border-slate-800 text-slate-300 font-semibold tracking-wide print:bg-gray-200 print:text-black print:border-black">
+                    <th className="py-3.5 px-3 w-12 text-center print:border print:border-black">No</th>
+                    <th className="col-nomor-rumah py-3.5 px-3 w-24 text-center print:border print:border-black">Nomor Rumah</th>
+                    <th className="col-nama-warga py-3.5 px-4 min-w-[140px] print:border print:border-black">Nama Warga</th>
+                    
+                    {/* 5 Weeks headers with date ranges */}
+                    {weeksInfo.map(w => (
+                      <th key={w.id} className="py-3.5 px-2 text-center w-24">
+                        <div className="flex flex-col items-center">
+                          <span className="text-cyan-400 font-bold">{w.label}</span>
+                          <span className="text-[10px] text-slate-400 font-normal">{w.range}</span>
+                        </div>
+                      </th>
+                    ))}
+
+                    <th className="py-3.5 px-4 text-right w-28">
+                      <span className="text-white font-bold">Total Jimpitan</span>
+                    </th>
+
+                    <th className="py-3.5 px-4 text-center w-28">
+                      <span className="text-slate-300 font-bold">Status</span>
+                    </th>
+                  </tr>
+                </thead>
+
+                <tbody className="divide-y divide-slate-800/70">
+                  {filteredRows.length === 0 ? (
+                    <tr>
+                      <td colSpan={10} className="py-12 text-center text-slate-400">
+                        <div className="flex flex-col items-center justify-center gap-2">
+                          <AlertCircle className="w-8 h-8 text-slate-600" />
+                          <span className="font-medium text-slate-300">Tidak ada data jimpitan warga</span>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredRows.map((row) => {
+                      const isLengkap = row.checkedCount === 5;
+                      const isSebagian = row.checkedCount > 0 && row.checkedCount < 5;
+
+                      return (
+                        <tr 
+                          key={row.warga.id}
+                          className={`hover:bg-slate-800/40 transition-colors ${
+                            isLengkap ? 'bg-cyan-950/10' : ''
+                          }`}
+                        >
+                          <td className="py-3 px-3 text-center font-mono text-slate-400 print:border print:border-black">{row.index}</td>
+                          <td className="col-nomor-rumah py-3 px-3 text-center print:border print:border-black">
+                            <span className="inline-block px-2 py-0.5 rounded-lg bg-slate-800 font-mono font-bold text-cyan-300 text-xs border border-slate-700/60 print:bg-transparent print:text-black print:border-none">
+                              {row.warga.nomorRumah}
+                            </span>
+                          </td>
+                          <td className="col-nama-warga py-3 px-4 font-semibold text-white print:text-black print:border print:border-black">
+                            {row.warga.namaWarga || row.warga.nama}
+                          </td>
+
+                          {/* Minggu 1 */}
+                          <td className="py-3 px-2 text-center">
+                            <label 
+                              htmlFor={`cb-jimp-m1-${row.warga.id}`}
+                              className="inline-flex items-center justify-center p-1.5 cursor-pointer group"
+                            >
+                              <input
+                                id={`cb-jimp-m1-${row.warga.id}`}
+                                type="checkbox"
+                                checked={row.m1}
+                                onChange={(e) => toggleJimpitanMinggu(row.warga.id, selectedBulan, selectedTahun, 'minggu1', e.target.checked)}
+                                className="sr-only"
+                              />
+                              <div className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all duration-200 border ${
+                                row.m1 
+                                  ? 'bg-cyan-500 border-cyan-400 text-white shadow-md shadow-cyan-950/50 scale-105' 
+                                  : 'bg-slate-800/80 border-slate-700 hover:border-slate-500 text-transparent group-hover:scale-105'
+                              }`}>
+                                <Check className={`w-4 h-4 stroke-[3] transition-transform ${row.m1 ? 'scale-100 opacity-100' : 'scale-75 opacity-0'}`} />
+                              </div>
+                            </label>
+                          </td>
+
+                          {/* Minggu 2 */}
+                          <td className="py-3 px-2 text-center">
+                            <label 
+                              htmlFor={`cb-jimp-m2-${row.warga.id}`}
+                              className="inline-flex items-center justify-center p-1.5 cursor-pointer group"
+                            >
+                              <input
+                                id={`cb-jimp-m2-${row.warga.id}`}
+                                type="checkbox"
+                                checked={row.m2}
+                                onChange={(e) => toggleJimpitanMinggu(row.warga.id, selectedBulan, selectedTahun, 'minggu2', e.target.checked)}
+                                className="sr-only"
+                              />
+                              <div className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all duration-200 border ${
+                                row.m2 
+                                  ? 'bg-cyan-500 border-cyan-400 text-white shadow-md shadow-cyan-950/50 scale-105' 
+                                  : 'bg-slate-800/80 border-slate-700 hover:border-slate-500 text-transparent group-hover:scale-105'
+                              }`}>
+                                <Check className={`w-4 h-4 stroke-[3] transition-transform ${row.m2 ? 'scale-100 opacity-100' : 'scale-75 opacity-0'}`} />
+                              </div>
+                            </label>
+                          </td>
+
+                          {/* Minggu 3 */}
+                          <td className="py-3 px-2 text-center">
+                            <label 
+                              htmlFor={`cb-jimp-m3-${row.warga.id}`}
+                              className="inline-flex items-center justify-center p-1.5 cursor-pointer group"
+                            >
+                              <input
+                                id={`cb-jimp-m3-${row.warga.id}`}
+                                type="checkbox"
+                                checked={row.m3}
+                                onChange={(e) => toggleJimpitanMinggu(row.warga.id, selectedBulan, selectedTahun, 'minggu3', e.target.checked)}
+                                className="sr-only"
+                              />
+                              <div className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all duration-200 border ${
+                                row.m3 
+                                  ? 'bg-cyan-500 border-cyan-400 text-white shadow-md shadow-cyan-950/50 scale-105' 
+                                  : 'bg-slate-800/80 border-slate-700 hover:border-slate-500 text-transparent group-hover:scale-105'
+                              }`}>
+                                <Check className={`w-4 h-4 stroke-[3] transition-transform ${row.m3 ? 'scale-100 opacity-100' : 'scale-75 opacity-0'}`} />
+                              </div>
+                            </label>
+                          </td>
+
+                          {/* Minggu 4 */}
+                          <td className="py-3 px-2 text-center">
+                            <label 
+                              htmlFor={`cb-jimp-m4-${row.warga.id}`}
+                              className="inline-flex items-center justify-center p-1.5 cursor-pointer group"
+                            >
+                              <input
+                                id={`cb-jimp-m4-${row.warga.id}`}
+                                type="checkbox"
+                                checked={row.m4}
+                                onChange={(e) => toggleJimpitanMinggu(row.warga.id, selectedBulan, selectedTahun, 'minggu4', e.target.checked)}
+                                className="sr-only"
+                              />
+                              <div className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all duration-200 border ${
+                                row.m4 
+                                  ? 'bg-cyan-500 border-cyan-400 text-white shadow-md shadow-cyan-950/50 scale-105' 
+                                  : 'bg-slate-800/80 border-slate-700 hover:border-slate-500 text-transparent group-hover:scale-105'
+                              }`}>
+                                <Check className={`w-4 h-4 stroke-[3] transition-transform ${row.m4 ? 'scale-100 opacity-100' : 'scale-75 opacity-0'}`} />
+                              </div>
+                            </label>
+                          </td>
+
+                          {/* Minggu 5 */}
+                          <td className="py-3 px-2 text-center">
+                            <label 
+                              htmlFor={`cb-jimp-m5-${row.warga.id}`}
+                              className="inline-flex items-center justify-center p-1.5 cursor-pointer group"
+                            >
+                              <input
+                                id={`cb-jimp-m5-${row.warga.id}`}
+                                type="checkbox"
+                                checked={row.m5}
+                                onChange={(e) => toggleJimpitanMinggu(row.warga.id, selectedBulan, selectedTahun, 'minggu5', e.target.checked)}
+                                className="sr-only"
+                              />
+                              <div className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all duration-200 border ${
+                                row.m5 
+                                  ? 'bg-cyan-500 border-cyan-400 text-white shadow-md shadow-cyan-950/50 scale-105' 
+                                  : 'bg-slate-800/80 border-slate-700 hover:border-slate-500 text-transparent group-hover:scale-105'
+                              }`}>
+                                <Check className={`w-4 h-4 stroke-[3] transition-transform ${row.m5 ? 'scale-100 opacity-100' : 'scale-75 opacity-0'}`} />
+                              </div>
+                            </label>
+                          </td>
+
+                          {/* Total Jimpitan */}
+                          <td className="py-3 px-4 text-right">
+                            <span className={`font-mono font-bold text-sm ${
+                              row.total > 0 ? 'text-cyan-400' : 'text-slate-500'
+                            }`}>
+                              {formatRupiah(row.total)}
+                            </span>
+                          </td>
+
+                          {/* Status */}
+                          <td className="py-3 px-4 text-center">
+                            <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
+                              isLengkap 
+                                ? 'bg-cyan-500/15 text-cyan-400 border-cyan-500/30' 
+                                : isSebagian 
+                                  ? 'bg-amber-500/15 text-amber-400 border-amber-500/30' 
+                                  : 'bg-slate-800 text-slate-400 border-slate-700'
+                            }`}>
+                              {isLengkap ? <CheckCircle2 className="w-3 h-3" /> : isSebagian ? <Clock className="w-3 h-3" /> : null}
+                              {row.checkedCount} / 5 Pekan
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Printable Formal Footer - Khusus Koordinator Jimpitan */}
+            <PrintJimpitanFooter
+              koordinatorNama={data.settings.koordinatorJimpitanNama || data.settings.signatories?.koordinatorJimpitan?.nama}
+              koordinatorJabatan={data.settings.koordinatorJimpitanJabatan || data.settings.signatories?.koordinatorJimpitan?.jabatan || 'Koordinator Jimpitan'}
+              lokasi="Semarang"
+            />
+          </div>
+
+          {/* Section: REKAP JIMPITAN */}
+          <div id="rekap-jimpitan-section" className="p-6 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-950 border border-slate-800 shadow-xl space-y-6 print:hidden">
+            
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-4 border-b border-slate-800">
+              <div>
+                <h3 className="text-base font-bold text-white tracking-tight flex items-center gap-2">
+                  <CircleDollarSign className="w-4 h-4 text-cyan-400" />
+                  REKAP JIMPITAN BULAN {NAMA_BULAN[selectedBulan - 1].toUpperCase()} {selectedTahun}
+                </h3>
+                <p className="text-xs text-slate-400">
+                  Total hasil pengumpulan jimpitan per pekan untuk kas operasional lingkungan
+                </p>
+              </div>
+              <div className="text-right">
+                <span className="text-xs text-slate-400">TOTAL JIMPITAN BULAN INI:</span>
+                <div className="text-2xl font-extrabold font-mono text-cyan-400">
+                  {formatRupiah(rekap.totalJimpitanBulan)}
+                </div>
+              </div>
+            </div>
+
+            {/* 5 Weekly Totals */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+              
+              <div className="p-3.5 rounded-xl bg-slate-900/90 border border-slate-800">
+                <div className="text-[10px] uppercase font-bold tracking-wider text-slate-400">
+                  TOTAL MINGGU 1
+                </div>
+                <div className="text-base font-bold font-mono text-cyan-400 mt-1">
+                  {formatRupiah(rekap.totalM1)}
+                </div>
+                <div className="text-[10px] text-slate-500 mt-0.5">{rekap.countM1} warga membayar</div>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-slate-900/90 border border-slate-800">
+                <div className="text-[10px] uppercase font-bold tracking-wider text-slate-400">
+                  TOTAL MINGGU 2
+                </div>
+                <div className="text-base font-bold font-mono text-cyan-400 mt-1">
+                  {formatRupiah(rekap.totalM2)}
+                </div>
+                <div className="text-[10px] text-slate-500 mt-0.5">{rekap.countM2} warga membayar</div>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-slate-900/90 border border-slate-800">
+                <div className="text-[10px] uppercase font-bold tracking-wider text-slate-400">
+                  TOTAL MINGGU 3
+                </div>
+                <div className="text-base font-bold font-mono text-cyan-400 mt-1">
+                  {formatRupiah(rekap.totalM3)}
+                </div>
+                <div className="text-[10px] text-slate-500 mt-0.5">{rekap.countM3} warga membayar</div>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-slate-900/90 border border-slate-800">
+                <div className="text-[10px] uppercase font-bold tracking-wider text-slate-400">
+                  TOTAL MINGGU 4
+                </div>
+                <div className="text-base font-bold font-mono text-cyan-400 mt-1">
+                  {formatRupiah(rekap.totalM4)}
+                </div>
+                <div className="text-[10px] text-slate-500 mt-0.5">{rekap.countM4} warga membayar</div>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-slate-900/90 border border-slate-800">
+                <div className="text-[10px] uppercase font-bold tracking-wider text-slate-400">
+                  TOTAL MINGGU 5
+                </div>
+                <div className="text-base font-bold font-mono text-cyan-400 mt-1">
+                  {formatRupiah(rekap.totalM5)}
+                </div>
+                <div className="text-[10px] text-slate-500 mt-0.5">{rekap.countM5} warga membayar</div>
+              </div>
+
+            </div>
+
+            {/* Summary Stats */}
+            <div className="pt-2 border-t border-slate-800/80 space-y-3">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
+                <div>
+                  <span className="text-slate-400">Warga Terdaftar:</span>
+                  <div className="text-lg font-bold text-white font-mono mt-0.5">{rekap.totalWarga} warga</div>
+                </div>
+                <div>
+                  <span className="text-slate-400">Warga Membayar:</span>
+                  <div className="text-lg font-bold text-cyan-400 font-mono mt-0.5">{rekap.wargaMembayar} warga</div>
+                </div>
+                <div>
+                  <span className="text-slate-400">Warga Belum Membayar:</span>
+                  <div className="text-lg font-bold text-rose-400 font-mono mt-0.5">{rekap.wargaBelum} warga</div>
+                </div>
+                <div>
+                  <span className="text-slate-400">Persentase Partisipasi:</span>
+                  <div className="text-lg font-bold text-emerald-400 font-mono mt-0.5">{rekap.persentase}%</div>
+                </div>
+              </div>
+
+              {/* Progress Bar */}
+              <div>
+                <div className="flex justify-between text-[11px] text-slate-400 mb-1 font-medium">
+                  <span>Partisipasi Warga dalam Jimpitan Bulan Ini</span>
+                  <span className="text-cyan-400 font-mono">{rekap.wargaMembayar} dari {rekap.totalWarga} warga aktif berpartisipasi</span>
+                </div>
+                <div className="w-full h-3 rounded-full bg-slate-800 overflow-hidden p-0.5 border border-slate-700/60">
+                  <div 
+                    className="h-full rounded-full bg-gradient-to-r from-cyan-500 to-blue-500 transition-all duration-500 shadow-sm"
+                    style={{ width: `${rekap.persentase}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
 
     </div>
   );

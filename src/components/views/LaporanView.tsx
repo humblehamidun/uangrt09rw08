@@ -20,7 +20,7 @@ import {
   Receipt
 } from 'lucide-react';
 import { formatRupiah, NAMA_BULAN, formatTanggalIndonesia, downloadCSV } from '../../utils/format';
-import { PrintReportHeader, PrintReportFooter, PrintPageStyle } from '../common/PrintReportLayout';
+import { PrintReportHeader, PrintReportFooter, PrintJimpitanFooter, PrintPageStyle } from '../common/PrintReportLayout';
 
 type LaporanTab = 'kas_rt' | 'iuran' | 'jimpitan' | 'donasi' | 'pengeluaran_dana' | 'dana_talangan' | 'buku_kas' | 'bop';
 
@@ -1472,11 +1472,19 @@ export const LaporanView: React.FC = () => {
         )}
 
         {/* Formal Printable Footer (Signatures & Timestamp) */}
-        <PrintReportFooter
-          ketuaRT={data.settings.ketuaRT || 'H. Sugiyanto, S.E.'}
-          bendahara={data.settings.bendahara || 'Bambang Pamungkas, S.Kom.'}
-          lokasi="Semarang"
-        />
+        {activeTab === 'jimpitan' ? (
+          <PrintJimpitanFooter
+            koordinatorNama={data.settings.koordinatorJimpitanNama || data.settings.signatories?.koordinatorJimpitan?.nama}
+            koordinatorJabatan={data.settings.koordinatorJimpitanJabatan || data.settings.signatories?.koordinatorJimpitan?.jabatan || 'Koordinator Jimpitan'}
+            lokasi="Semarang"
+          />
+        ) : (
+          <PrintReportFooter
+            ketuaRT={data.settings.ketuaRT || 'H. Sugiyanto, S.E.'}
+            bendahara={data.settings.bendahara || 'Bambang Pamungkas, S.Kom.'}
+            lokasi="Semarang"
+          />
+        )}
 
       </div>
 

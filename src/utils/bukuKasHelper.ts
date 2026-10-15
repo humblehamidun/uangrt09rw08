@@ -536,6 +536,7 @@ export function syncAllSourcesToBukuKas(
           updatedBy: record.updatedBy || defaultOfficer,
           updatedAt: record.updatedAt || nowIso,
           keterangan: record.keterangan || (record.periode ? `Periode: ${record.periode}` : undefined),
+          sumberDana: record.sumberDana,
         });
       } else if (existing && existing.status === 'Aktif') {
         resultList.push({
